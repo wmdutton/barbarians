@@ -1,8 +1,8 @@
 <!--
   Barbarians — Prototype
-  Version: 0.0.0.0
+  Version: 0.0.1.0
   Author: Mason Dutton
-  Last updated: 2026-07-12
+  Last updated: 2026-07-13
 
   Single-file HTML/CSS/JS prototype. No build step, no dependencies —
   open directly in a browser or serve as a static site (e.g. GitHub Pages).
@@ -18,14 +18,19 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Barbarians — Prototype</title>
 <style>
+  * {
+    box-sizing: border-box;
+  }
   body {
     background: #1b1b1b;
     color: #e8e0d0;
     font-family: Georgia, serif;
     max-width: 700px;
     margin: 40px auto;
+    padding: 0 16px;
     line-height: 1.5;
   }
   h1 {
@@ -45,6 +50,11 @@
   .character .skill {
     color: #c9a86a;
     font-style: italic;
+  }
+  .character .secondary-skill {
+    color: #8a7a54;
+    font-style: italic;
+    font-size: 0.8em;
   }
   .character .backstory {
     margin-top: 4px;
@@ -81,18 +91,22 @@
     background: #1b1b1b;
     color: #e8e0d0;
     border: 1px solid #555;
-    padding: 4px;
+    padding: 8px;
     font-family: Georgia, serif;
+    font-size: 1em;
+    max-width: 100%;
   }
   #startDayBtn {
     margin-top: 10px;
-    padding: 10px 18px;
+    padding: 12px 18px;
     background: #8a6d3b;
     color: #1b1b1b;
     border: none;
     font-family: Georgia, serif;
     font-weight: bold;
+    font-size: 1em;
     cursor: pointer;
+    width: 100%;
   }
   #startDayBtn:disabled {
     background: #555;
@@ -109,7 +123,8 @@
     padding: 10px;
     background: #262626;
     display: flex;
-    gap: 20px;
+    flex-wrap: wrap;
+    gap: 10px 20px;
     font-size: 0.95em;
   }
   #resourceSummary span {
@@ -134,7 +149,7 @@
   }
   #resetBtn {
     margin-top: 10px;
-    padding: 8px 16px;
+    padding: 10px 16px;
     background: #8a6d3b;
     color: #1b1b1b;
     border: none;
@@ -188,6 +203,11 @@
     font-style: italic;
     font-size: 0.9em;
   }
+  .candidate .secondary-skill {
+    color: #8a7a54;
+    font-style: italic;
+    font-size: 0.78em;
+  }
   .candidate .backstory {
     margin-top: 4px;
     font-size: 0.85em;
@@ -200,12 +220,13 @@
   }
   #rerollBtn, #confirmVanguardBtn {
     margin-top: 14px;
-    padding: 10px 18px;
+    padding: 12px 18px;
     background: #8a6d3b;
     color: #1b1b1b;
     border: none;
     font-family: Georgia, serif;
     font-weight: bold;
+    font-size: 1em;
     cursor: pointer;
   }
   #rerollBtn:disabled, #confirmVanguardBtn:disabled {
@@ -229,6 +250,72 @@
     font-size: 0.75em;
     font-family: Georgia, serif;
     text-align: center;
+  }
+
+  /* ---------------------------------------------
+     MOBILE RESPONSIVENESS
+     Narrow viewports: candidate cards go full-width and stack
+     (instead of a multi-column flex-wrap grid that shrinks
+     illegibly), buttons/selects get bigger tap targets, and
+     side-by-side layout collapses to single column.
+     --------------------------------------------- */
+  @media (max-width: 600px) {
+    body {
+      margin: 16px auto;
+      font-size: 1.05em;
+    }
+    h1 {
+      font-size: 1.6em;
+    }
+    #candidatePool {
+      flex-direction: column;
+    }
+    .candidate {
+      width: 100%;
+    }
+    #resourceSummary {
+      flex-direction: column;
+      gap: 6px;
+    }
+    #rerollBtn {
+      width: 100%;
+      margin-right: 0;
+    }
+    #rerollCount {
+      display: block;
+      margin-left: 0;
+      margin-top: 8px;
+    }
+    #confirmVanguardBtn {
+      width: 100%;
+    }
+    select {
+      width: 100%;
+    }
+    /* In-game roster (post-selection) — same full-width, bigger-tap-target
+       treatment as the candidate screen. .character cards already stack
+       (one per row, block-level div), so the main fix here is sizing
+       within the card, not layout direction. */
+    .character {
+      padding: 12px;
+    }
+    .character .name {
+      font-size: 1.15em;
+    }
+    .character .task-row select {
+      width: 100%;
+      margin-top: 6px;
+    }
+    .character .task-row label {
+      display: block;
+      margin-bottom: 2px;
+    }
+    .day-entry {
+      padding: 12px;
+    }
+    .game-over {
+      font-size: 1em;
+    }
   }
 </style>
 </head>
@@ -254,7 +341,7 @@
   <div id="dayLog"></div>
 </div>
 
-<div id="versionFooter">Barbarians — v0.0.0.0 — Mason Dutton — 2026-07-12</div>
+<div id="versionFooter">Barbarians — v0.0.1.0 — Mason Dutton — 2026-07-13</div>
 
 <script>
 
@@ -393,6 +480,16 @@ function rollSkill() {
   return ALL_SKILLS[index];
 }
 
+// Rolls a Secondary skill, guaranteed different from the given
+// Primary skill. Every character has exactly one Primary and one
+// Secondary skill, fully random pairing — they don't need to relate
+// narratively (e.g. a Cook can roll Soldier as Secondary).
+function rollSecondarySkill(primarySkill) {
+  const options = ALL_SKILLS.filter(skill => skill !== primarySkill);
+  const index = Math.floor(Math.random() * options.length);
+  return options[index];
+}
+
 // Picks one backstory sentence matching the given skill.
 function pickBackstory(skill) {
   const options = BACKSTORY_POOL[skill];
@@ -402,13 +499,43 @@ function pickBackstory(skill) {
 
 // Rolls the starting supplies a candidate brings with them, tied to
 // their skill. See design-rationale.md for why this is per-candidate.
+//
+// Laborer is a special case: instead of one modest fixed resource,
+// a Laborer rolls TWO of the four resource types at random, each at
+// a moderate range. This is what makes Laborer's supply line
+// distinct from every other Laborer — two Laborers can bring very
+// different combinations, whereas "always rations" would make every
+// Laborer interchangeable. See design-rationale.md (Laborer section).
+const LABORER_RESOURCE_POOL = ["rations", "rawFood", "wood", "weapons"];
+const LABORER_SUPPLY_RANGES = {
+  rations: [2, 4],
+  rawFood: [1, 3],
+  wood: [1, 3],
+  weapons: [1, 2]
+};
+
+function rollLaborerSupplies() {
+  const shuffled = [...LABORER_RESOURCE_POOL].sort(() => Math.random() - 0.5);
+  const chosenResources = shuffled.slice(0, 2);
+
+  const supplies = {};
+  chosenResources.forEach(resource => {
+    const [min, max] = LABORER_SUPPLY_RANGES[resource];
+    supplies[resource] = min + Math.floor(Math.random() * (max - min + 1));
+  });
+  return supplies;
+}
+
 function rollStartingSupplies(skill) {
+  if (skill === "Laborer") {
+    return rollLaborerSupplies();
+  }
+
   const supplyRanges = {
     Cook: { rations: [3, 6] },
     Hunter: { rawFood: [2, 5] },
     Carpenter: { wood: [2, 5] },
-    Soldier: { weapons: [1, 3] },
-    Laborer: { rations: [1, 2] } // no specialty supply, just modest personal provisions
+    Soldier: { weapons: [1, 3] }
   };
 
   const ranges = supplyRanges[skill] || {};
@@ -433,13 +560,18 @@ function assignWeaponType(skill) {
   return weaponBySkill[skill] || "dagger";
 }
 
-// Builds one settler object.
+// Builds one settler object. Every settler has a Primary skill
+// (labeled on the card, drives the best yield tier) and a Secondary
+// skill (shown smaller/unlabeled underneath, drives a moderate yield
+// tier). See design-rationale.md for the full tier resolution rule.
 function createSettler(name) {
   const skill = rollSkill();
+  const secondarySkill = rollSecondarySkill(skill);
   return {
     id: name.toLowerCase(),
     name: name,
-    skill: skill,
+    skill: skill,                      // Primary skill
+    secondarySkill: secondarySkill,    // Secondary skill
     backstory: pickBackstory(skill),
     alive: true,
     currentTask: null,  // assigned once the day simulation exists
@@ -506,6 +638,7 @@ function renderCandidatePool() {
     card.innerHTML = `
       <div class="name">${candidate.name}</div>
       <div class="skill">${candidate.skill}</div>
+      <div class="secondary-skill">${candidate.secondarySkill}</div>
       <div class="backstory">${candidate.name}, ${candidate.backstory}</div>
       <div class="supplies">${formatSupplies(candidate.suppliesBrought)}</div>
     `;
@@ -611,6 +744,7 @@ function renderRoster() {
       card.innerHTML = `
         <div class="name">${character.name}</div>
         <div class="skill">${character.skill} — carries a ${character.weaponType}</div>
+        <div class="secondary-skill">${character.secondarySkill}</div>
         ${hungerTag}
         <div class="backstory">${character.name}, ${character.backstory}</div>
         <div class="task-row">
@@ -681,20 +815,45 @@ function updateStartDayAvailability() {
 // None of these touch the DOM — display reads gameState after.
 // ---------------------------------------------
 
-// Returns true if this character's skill matches the given task.
-// Used to scale output — no task is skill-gated, skill only affects
-// how well a settler performs it. See design-rationale.md.
-function isSkilledAt(character, task) {
-  const skillForTask = {
-    "Build Palisade": "Carpenter",
-    "Hunt": "Hunter",
-    "Cook": "Cook",
-    "Forage": "Hunter",           // tracking/woodcraft covers foraging too
-    "Scout": "Hunter" // same skillset — a ranger reads the land
-    // Perimeter Watch has no output yet, so no skill mapping needed
-    // Woodcutting has no specialist — see resolveWoodcutting
-  };
-  return character.skill === skillForTask[task];
+// Maps each skill-gated task to the skill that's considered a
+// match for it. Used by getSkillTier() to figure out whether a
+// character's Primary or Secondary skill applies to a given task.
+const SKILL_FOR_TASK = {
+  "Woodcutting": "Carpenter",
+  "Build Palisade": "Carpenter",
+  "Hunt": "Hunter",
+  "Cook": "Cook",
+  "Forage": "Hunter",   // tracking/woodcraft covers foraging too
+  "Scout": "Hunter"     // same skillset — a ranger reads the land
+  // Perimeter Watch has no output yet, so no skill mapping needed
+};
+
+// ---------------------------------------------
+// SKILL TIER RESOLUTION
+//
+// Every skill-gated task now has three possible tiers instead of
+// two: "primary" (best), "secondary" (moderate), and "base" (no
+// match). Laborer is a deliberate special case: it grants no
+// task-specific bonus anywhere, but a Laborer-primary character
+// always gets AT LEAST the "secondary" (moderate) tier on every
+// task, representing reliable-but-unspecialized competence. See
+// design-rationale.md for the full reasoning.
+//
+// Resolution order (first match wins):
+//   1. Primary skill is Laborer -> "secondary" tier, always.
+//   2. Primary skill matches this task -> "primary" tier.
+//   3. Secondary skill matches this task (and isn't Laborer,
+//      since Laborer-as-secondary grants no bonus) -> "secondary" tier.
+//   4. No match -> "base" tier.
+// ---------------------------------------------
+function getSkillTier(character, task) {
+  const matchingSkill = SKILL_FOR_TASK[task];
+  if (!matchingSkill) return "base"; // task has no skill mapping at all
+
+  if (character.skill === "Laborer") return "secondary";
+  if (character.skill === matchingSkill) return "primary";
+  if (character.secondarySkill === matchingSkill && character.secondarySkill !== "Laborer") return "secondary";
+  return "base";
 }
 
 // ---------------------------------------------
@@ -720,19 +879,35 @@ function yieldQualityTier(amount, min, max) {
   return "great";
 }
 
+// Picks the [min, max] yield range for a character on a given task,
+// based on their skill tier (primary/secondary/base). Each task
+// resolver defines its own three ranges and calls this to select
+// the right one — keeps the three-tier logic in one place instead
+// of repeated per task.
+function rangeForTier(tier, ranges) {
+  return ranges[tier];
+}
 
-// Woodcutting: Carpenter and Laborer count as skilled. See
-// design-rationale.md for the reasoning behind that pairing.
+
+// Woodcutting: Carpenter (primary) does best; Laborer or anyone
+// with Carpenter as Secondary gets a moderate bump; everyone else
+// manages, but less of the tree becomes usable wood. See
+// design-rationale.md.
 function resolveWoodcutting(character) {
-  const skilled = character.skill === "Carpenter" || character.skill === "Laborer";
-  const [min, max] = skilled ? [3, 6] : [0, 3];
+  const tier = getSkillTier(character, "Woodcutting");
+  const ranges = {
+    primary: [3, 6],
+    secondary: [2, 4],
+    base: [0, 3]
+  };
+  const [min, max] = rangeForTier(tier, ranges);
 
   if (gameState.environment.treesRemainingNearby === 0) {
     return `${character.name} searched nearby but found no trees left standing — the camp will need to scout further afield.`;
   }
 
   const logs = rollYield(min, max);
-  const tier = yieldQualityTier(logs, min, max);
+  const qualityTier = yieldQualityTier(logs, min, max);
   gameState.environment.treesRemainingNearby -= 1;
   gameState.resources.wood += logs;
 
@@ -742,15 +917,21 @@ function resolveWoodcutting(character) {
     average: `${character.name} felled a tree and worked it into ${logs} logs.`,
     great: `${character.name} felled a tree and made unusually good use of it — ${logs} solid logs.`
   };
-  return flavor[tier];
+  return flavor[qualityTier];
 }
 
 // Build Palisade: skill affects progress rate, not wood cost.
-// See design-rationale.md.
+// Three tiers of progress speed now instead of two. See
+// design-rationale.md.
 function resolveBuildPalisade(character) {
-  const skilled = isSkilledAt(character, "Build Palisade");
-  const woodCost = skilled ? 3 : 3; // same either way — see design-rationale.md
-  const progressGain = skilled ? 15 : 6;
+  const tier = getSkillTier(character, "Build Palisade");
+  const woodCost = 3; // same for every tier — see design-rationale.md
+  const progressByTier = {
+    primary: 15,
+    secondary: 10,
+    base: 6
+  };
+  const progressGain = progressByTier[tier];
 
   if (gameState.resources.wood < woodCost) {
     return `${character.name} had no wood left to work with and made no progress on the palisade.`;
@@ -762,20 +943,28 @@ function resolveBuildPalisade(character) {
     gameState.resources.palisadeProgress + progressGain
   );
 
-  if (skilled) {
+  if (tier === "primary") {
     return `${character.name} squared the timbers and set them true, working steadily along the line.`;
+  }
+  if (tier === "secondary") {
+    return `${character.name} made decent progress, though the line isn't as clean as a trained hand would leave it.`;
   }
   return `${character.name} wrestled the logs into place, gaps and all — slow, uneven progress.`;
 }
 
-// Hunt: skilled hunters get more raw food, reliably; unskilled
-// hunters get less. See design-rationale.md.
+// Hunt: Hunter (primary) gets more raw food, reliably; a moderate
+// tier sits between; base tier gets little. See design-rationale.md.
 function resolveHunt(character) {
-  const skilled = isSkilledAt(character, "Hunt");
-  const [min, max] = skilled ? [2, 6] : [0, 3];
+  const tier = getSkillTier(character, "Hunt");
+  const ranges = {
+    primary: [2, 6],
+    secondary: [1, 4],
+    base: [0, 3]
+  };
+  const [min, max] = rangeForTier(tier, ranges);
 
   const rawYield = rollYield(min, max);
-  const tier = yieldQualityTier(rawYield, min, max);
+  const qualityTier = yieldQualityTier(rawYield, min, max);
   gameState.resources.rawFood += rawYield;
 
   const game = ["a hare", "a brace of pheasant", "a young boar", "a deer"];
@@ -787,14 +976,20 @@ function resolveHunt(character) {
     average: `${character.name} brought down ${catch_} — ${rawYield} portions of meat.`,
     great: `${character.name} took ${catch_} and more besides — ${rawYield} portions of meat.`
   };
-  return flavor[tier];
+  return flavor[qualityTier];
 }
 
 // Cook: converts raw food into rations; also converts forage food
 // into rations at 2:1. Does both in the same day if available.
+// Three tiers of conversion efficiency. See design-rationale.md.
 function resolveCook(character) {
-  const skilled = isSkilledAt(character, "Cook");
-  const conversionRate = skilled ? 0.9 : 0.5; // fraction of raw food successfully turned into rations
+  const tier = getSkillTier(character, "Cook");
+  const conversionRateByTier = {
+    primary: 0.9,
+    secondary: 0.7,
+    base: 0.5
+  };
+  const conversionRate = conversionRateByTier[tier];
 
   const rawFoodAvailable = gameState.resources.rawFood;
   const forageFoodAvailable = gameState.resources.forageFood;
@@ -824,8 +1019,11 @@ function resolveCook(character) {
   gameState.resources.rations += rationsProduced;
 
   const detail = notes.join(" and ");
-  if (skilled) {
+  if (tier === "primary") {
     return `${character.name} worked the fire all day — ${rationsProduced} rations set aside (${detail}).`;
+  }
+  if (tier === "secondary") {
+    return `${character.name} kept the fire going and did a fair job of it — ${rationsProduced} rations set aside (${detail}).`;
   }
   return `${character.name} tended the fire, though some of it scorched or went to waste — ${rationsProduced} rations set aside (${detail}).`;
 }
@@ -838,9 +1036,10 @@ function resolvePerimeterWatch(character) {
 }
 
 // Forage: finds food that's edible without cooking. Also has a
-// chance of turning up more nearby trees. See design-rationale.md.
+// chance of turning up more nearby trees. Three tiers of yield.
+// See design-rationale.md.
 function resolveForage(character) {
-  const skilled = isSkilledAt(character, "Forage");
+  const tier = getSkillTier(character, "Forage");
   const roll = Math.random();
   const treeFindChance = 0.25;
 
@@ -850,9 +1049,14 @@ function resolveForage(character) {
     return `${character.name} ranged out foraging and stumbled onto a stand of ${foundTrees} more trees worth working.`;
   }
 
-  const [min, max] = skilled ? [2, 5] : [0, 2];
+  const ranges = {
+    primary: [2, 5],
+    secondary: [1, 3],
+    base: [0, 2]
+  };
+  const [min, max] = rangeForTier(tier, ranges);
   const foundFood = rollYield(min, max);
-  const tier = yieldQualityTier(foundFood, min, max);
+  const qualityTier = yieldQualityTier(foundFood, min, max);
 
   if (foundFood > 0) {
     gameState.resources.forageFood += foundFood;
@@ -868,7 +1072,7 @@ function resolveForage(character) {
     average: `${character.name} brought back ${item}, ${foundFood} portions in all.`,
     great: `${character.name} found ${item} in real abundance — ${foundFood} portions.`
   };
-  return flavor[tier];
+  return flavor[qualityTier];
 }
 
 // Scout: Hunter and Soldier each estimate different stats (days vs.
@@ -876,6 +1080,12 @@ function resolveForage(character) {
 // "combo" that guarantees an accurate reading. Runs once per day
 // (not per-character) — see resolveScoutForEnemiesForDay, called
 // from runDay(). Full reasoning in design-rationale.md.
+//
+// NOTE: Scout's Hunter/Soldier accuracy split is its own existing
+// mechanic and is intentionally NOT run through getSkillTier()/the
+// new Primary/Secondary tiers in this pass — see chat notes. It
+// still only checks character.skill directly (Primary), same as
+// before.
 
 // Rolls one estimate (count or days). Returns the true value if
 // accurate, otherwise a plausible-but-wrong value (over or under).
@@ -1365,4 +1575,3 @@ document.getElementById("startDayBtn").addEventListener("click", startDay);
 </script>
 </body>
 </html>
-
