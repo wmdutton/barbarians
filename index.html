@@ -1,0 +1,1367 @@
+<!--
+  Barbarians — Prototype
+  Version: 0.0.0.0
+  Author: Mason Dutton
+  Last updated: 2026-07-12
+
+  Single-file HTML/CSS/JS prototype. No build step, no dependencies —
+  open directly in a browser or serve as a static site (e.g. GitHub Pages).
+  This is Phase 1 (The Vanguard) only: character generation, vanguard
+  selection, daily task assignment, and outrider raid mechanics.
+
+  Comments in this file explain WHAT the code does. For WHY specific
+  numbers/rules were chosen, see design-rationale.md (repo root).
+  For the full game vision and locked decisions, see the project's
+  design doc (barbarians-design-doc.md).
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Barbarians — Prototype</title>
+<style>
+  body {
+    background: #1b1b1b;
+    color: #e8e0d0;
+    font-family: Georgia, serif;
+    max-width: 700px;
+    margin: 40px auto;
+    line-height: 1.5;
+  }
+  h1 {
+    border-bottom: 1px solid #555;
+    padding-bottom: 8px;
+  }
+  .character {
+    margin-bottom: 18px;
+    padding: 10px;
+    background: #262626;
+    border-left: 3px solid #8a6d3b;
+  }
+  .character .name {
+    font-weight: bold;
+    font-size: 1.1em;
+  }
+  .character .skill {
+    color: #c9a86a;
+    font-style: italic;
+  }
+  .character .backstory {
+    margin-top: 4px;
+    color: #bdbdbd;
+  }
+  .hunger-tag {
+    display: inline-block;
+    margin-top: 4px;
+    padding: 2px 8px;
+    font-size: 0.8em;
+    font-weight: bold;
+    text-transform: uppercase;
+    border-radius: 3px;
+  }
+  .hunger-tag.hungry {
+    background: #6b5a1f;
+    color: #e6d6a6;
+  }
+  .hunger-tag.starving {
+    background: #6b2f1f;
+    color: #e6b6a6;
+  }
+  .character.deceased {
+    border-left-color: #6b1f1f;
+    opacity: 0.6;
+  }
+  .character.deceased .name {
+    color: #a05050;
+  }
+  .character .task-row {
+    margin-top: 8px;
+  }
+  select {
+    background: #1b1b1b;
+    color: #e8e0d0;
+    border: 1px solid #555;
+    padding: 4px;
+    font-family: Georgia, serif;
+  }
+  #startDayBtn {
+    margin-top: 10px;
+    padding: 10px 18px;
+    background: #8a6d3b;
+    color: #1b1b1b;
+    border: none;
+    font-family: Georgia, serif;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  #startDayBtn:disabled {
+    background: #555;
+    color: #999;
+    cursor: not-allowed;
+  }
+  #assignmentStatus {
+    margin-top: 6px;
+    color: #c9a86a;
+    font-style: italic;
+  }
+  #resourceSummary {
+    margin-bottom: 20px;
+    padding: 10px;
+    background: #262626;
+    display: flex;
+    gap: 20px;
+    font-size: 0.95em;
+  }
+  #resourceSummary span {
+    color: #c9a86a;
+  }
+  .game-over {
+    margin-bottom: 20px;
+    padding: 14px;
+    font-weight: bold;
+    font-size: 1.1em;
+    text-align: center;
+  }
+  .game-over.victory {
+    background: #2f4a2f;
+    color: #b6e6b6;
+    border: 1px solid #5a8a5a;
+  }
+  .game-over.defeat {
+    background: #4a2f2f;
+    color: #e6b6b6;
+    border: 1px solid #8a5a5a;
+  }
+  #resetBtn {
+    margin-top: 10px;
+    padding: 8px 16px;
+    background: #8a6d3b;
+    color: #1b1b1b;
+    border: none;
+    font-family: Georgia, serif;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  #dayLog {
+    margin-top: 20px;
+  }
+  .day-entry {
+    margin-bottom: 14px;
+    padding: 10px;
+    background: #202020;
+    border-left: 3px solid #555;
+  }
+  .day-entry .day-title {
+    font-weight: bold;
+    margin-bottom: 6px;
+    color: #c9a86a;
+  }
+  .day-entry ul {
+    margin: 0;
+    padding-left: 20px;
+  }
+  #selectionInstructions {
+    color: #c9a86a;
+    font-style: italic;
+  }
+  #candidatePool {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .candidate {
+    width: 200px;
+    padding: 10px;
+    background: #262626;
+    border-left: 3px solid #555;
+    cursor: pointer;
+  }
+  .candidate.selected {
+    border-left-color: #8a6d3b;
+    background: #33301f;
+  }
+  .candidate .name {
+    font-weight: bold;
+  }
+  .candidate .skill {
+    color: #c9a86a;
+    font-style: italic;
+    font-size: 0.9em;
+  }
+  .candidate .backstory {
+    margin-top: 4px;
+    font-size: 0.85em;
+    color: #bdbdbd;
+  }
+  .candidate .supplies {
+    margin-top: 6px;
+    font-size: 0.85em;
+    color: #7a9e7a;
+  }
+  #rerollBtn, #confirmVanguardBtn {
+    margin-top: 14px;
+    padding: 10px 18px;
+    background: #8a6d3b;
+    color: #1b1b1b;
+    border: none;
+    font-family: Georgia, serif;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  #rerollBtn:disabled, #confirmVanguardBtn:disabled {
+    background: #555;
+    color: #999;
+    cursor: not-allowed;
+  }
+  #rerollCount {
+    margin-left: 10px;
+    color: #c9a86a;
+    font-style: italic;
+  }
+  /* Version footer — small, unobtrusive, pinned to normal document flow
+     at the bottom of the page (not fixed/sticky, so it never covers
+     game content on short viewports). */
+  #versionFooter {
+    margin-top: 40px;
+    padding-top: 10px;
+    border-top: 1px solid #333;
+    color: #666;
+    font-size: 0.75em;
+    font-family: Georgia, serif;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<h1>Barbarians</h1>
+
+<div id="selectionScreen">
+  <p id="selectionInstructions"></p>
+  <div id="candidatePool"></div>
+  <button id="rerollBtn">Reroll Remaining Candidates</button>
+  <span id="rerollCount"></span>
+  <br><br>
+  <button id="confirmVanguardBtn" disabled>Confirm Vanguard</button>
+</div>
+
+<div id="gameScreen" style="display: none;">
+  <div id="resourceSummary"></div>
+  <div id="gameOverBanner" style="display: none;"></div>
+  <div id="roster"></div>
+  <button id="startDayBtn" disabled>Start Day</button>
+  <div id="assignmentStatus"></div>
+  <div id="dayLog"></div>
+</div>
+
+<div id="versionFooter">Barbarians — v0.0.0.0 — Mason Dutton — 2026-07-12</div>
+
+<script>
+
+// Rolls the starting tree count near the camp (8 to 10).
+function rollStartingTrees() {
+  return 8 + Math.floor(Math.random() * 3); // 8 to 10
+}
+
+// Rolls which day the next outrider wave arrives (1-3 days out
+// from fromDay). See design-rationale.md for balance reasoning.
+function rollNextWaveDay(fromDay) {
+  const gap = 1 + Math.floor(Math.random() * 3); // 1 to 3 days out
+  return fromDay + gap;
+}
+
+// ---------------------------------------------
+// GAME STATE
+// This object is the single source of truth.
+// Every system reads from and writes to this.
+// ---------------------------------------------
+const gameState = {
+
+  day: 1,
+
+  resources: {
+    rations: 0,     // set by whichever Cooks the player picks — see applyStartingSupplies()
+    rawFood: 0,     // hunted meat — needs a Cook before it's safe/wise to eat
+    forageFood: 0,  // foraged food — edible directly, no cooking needed, but spoils fast
+    forageFoodAge: 0, // days since the current forage food stock was gathered — spoils at 2
+    wood: 0,        // set by whichever Carpenters the player picks
+    weapons: 0,     // set by whichever Soldiers the player picks
+    palisadeProgress: 0 // percent, 0-100 — reflects the log wall/stakes, blunts attacks even unfinished
+  },
+
+  characters: [], // filled in by generateSettlers()
+
+  environment: {
+    treesRemainingNearby: rollStartingTrees(), // randomized, see rollStartingTrees()
+    safeForagingRange: "normal", // "extended" if player later approves risk
+    groundQuality: "rocky" // slows the farmer
+  },
+
+  log: [
+    // one entry per day, e.g.:
+    // { day: 1, entries: ["Thomas felled two trees near camp.", "Rations held steady."] }
+  ],
+
+  pendingDecision: null,
+  // when a decision is surfaced, something like:
+  // { id: "rangeTrees", prompt: "...", options: ["rangeFurther", "buildSmaller"] }
+
+  gameOver: false,
+  outcome: null, // "victory" (palisade complete) or "defeat" (wiped out / starved) once gameOver is true
+
+  nextWaveDay: rollNextWaveDay(1), // rerolled after each wave — see rollNextWaveDay
+  nextWaveWindow: 3, // max days out a Scout warning can estimate
+  scoutWarning: null // set by resolveScoutForEnemies: { estimatedDays, estimatedCount, accurate }
+
+};
+
+
+// ---------------------------------------------
+// DATA POOLS
+// Names, skills, and backstory fragments used
+// to generate settlers. Kept separate from the
+// generation logic so they're easy to expand later.
+// ---------------------------------------------
+
+// Names for the vanguard roster (male-only — see design-rationale.md).
+const NAME_POOL = [
+  "Thomas", "Aelfric", "Godwin", "Osric", "Wulfstan",
+  "Alwyn", "Cedric", "Baldric", "Leofric", "Eadric",
+  "Roger", "Walter", "Hubert", "Warin", "Gervase"
+];
+
+// One sentence of specific backstory per skill.
+// Each skill has a few options so repeats don't feel identical.
+const BACKSTORY_POOL = {
+  Carpenter: [
+    "a Suffolk carpenter, second son of a tradesman who has never been this far from home.",
+    "trained under a York guild master, still carries his late father's chisel.",
+    "left an apprenticeship unfinished when the roads north grew too dangerous to travel."
+  ],
+  Hunter: [
+    "grew up poaching the king's deer and never once got caught.",
+    "spent more nights sleeping under trees than under a roof, and prefers it that way.",
+    "learned to track from a father who was better with animals than with people."
+  ],
+  Cook: [
+    "ran a tavern kitchen for a decade before the harvest failures closed it.",
+    "was taught to stretch a meal for twelve on rations meant for six.",
+    "still has burn scars from a fire that took a family's bakery, not this one."
+  ],
+  Soldier: [
+    "survived a border skirmish that killed most of his unit.",
+    "was a household guard for a lord who no longer has a household.",
+    "has killed before and does not talk about it unless asked twice."
+  ],
+  Laborer: [
+    "has done a bit of everything and mastered none of it, but never complains about the work.",
+    "worked docks, fields, and quarries before answering the call for this vanguard.",
+    "is stronger backed than skilled, and knows it."
+  ],
+  Farmer: [
+    "worked land that belonged to three different lords in one lifetime.",
+    "knows soil the way some people know scripture.",
+    "buried two children before turning twenty and rarely speaks of either."
+  ]
+};
+
+// Active vanguard skill pool. Farmer exists in BACKSTORY_POOL but is
+// intentionally excluded here — see design-rationale.md.
+const ALL_SKILLS = ["Carpenter", "Hunter", "Cook", "Soldier", "Laborer"];
+
+// The tasks a settler can be assigned to for the day.
+// No task is skill-gated — any settler can attempt any task.
+// Skill only affects how well they do it (see resolve* functions).
+const TASK_POOL = ["Woodcutting", "Build Palisade", "Hunt", "Cook", "Perimeter Watch", "Forage", "Scout"];
+
+
+// ---------------------------------------------
+// CHARACTER GENERATION
+// ---------------------------------------------
+
+// Picks 5 unique names from the pool so no two settlers share a name.
+function pickUniqueNames(count) {
+  const shuffled = [...NAME_POOL].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, count);
+}
+
+// Skills are rolled independently per settler — overlaps
+// and gaps are allowed on purpose. A settlement with two
+// Cooks and no Soldier is a valid (and interesting) outcome.
+function rollSkill() {
+  const index = Math.floor(Math.random() * ALL_SKILLS.length);
+  return ALL_SKILLS[index];
+}
+
+// Picks one backstory sentence matching the given skill.
+function pickBackstory(skill) {
+  const options = BACKSTORY_POOL[skill];
+  const index = Math.floor(Math.random() * options.length);
+  return options[index];
+}
+
+// Rolls the starting supplies a candidate brings with them, tied to
+// their skill. See design-rationale.md for why this is per-candidate.
+function rollStartingSupplies(skill) {
+  const supplyRanges = {
+    Cook: { rations: [3, 6] },
+    Hunter: { rawFood: [2, 5] },
+    Carpenter: { wood: [2, 5] },
+    Soldier: { weapons: [1, 3] },
+    Laborer: { rations: [1, 2] } // no specialty supply, just modest personal provisions
+  };
+
+  const ranges = supplyRanges[skill] || {};
+  const supplies = {};
+  for (const resource in ranges) {
+    const [min, max] = ranges[resource];
+    supplies[resource] = min + Math.floor(Math.random() * (max - min + 1));
+  }
+  return supplies;
+}
+
+// Assigns a weapon type by skill (currently flavor-only — see
+// design-rationale.md re: upcoming combat rework).
+function assignWeaponType(skill) {
+  const weaponBySkill = {
+    Soldier: "sword",
+    Hunter: "bow",
+    Carpenter: "hand axe",
+    Cook: "kitchen knife",
+    Laborer: "dagger"
+  };
+  return weaponBySkill[skill] || "dagger";
+}
+
+// Builds one settler object.
+function createSettler(name) {
+  const skill = rollSkill();
+  return {
+    id: name.toLowerCase(),
+    name: name,
+    skill: skill,
+    backstory: pickBackstory(skill),
+    alive: true,
+    currentTask: null,  // assigned once the day simulation exists
+    position: "campsite", // everyone starts safe, at the campsite
+    suppliesBrought: rollStartingSupplies(skill), // what this candidate adds if chosen
+    daysWithoutFood: 0,  // 0 = fine, 1 = hungry, 2 = starving, 3 = dead
+    weaponType: assignWeaponType(skill),
+    armed: true // placeholder — see design-rationale.md
+  };
+}
+
+// Builds the full starting roster of five settlers
+// and returns it as an array, ready to drop into gameState.characters.
+function generateSettlers() {
+  const names = pickUniqueNames(5);
+  return names.map(createSettler);
+}
+
+
+// ---------------------------------------------
+// VANGUARD SELECTION
+// Before the day loop starts, the player is shown a pool of
+// candidate men and picks exactly 5 to form the vanguard.
+// A limited number of rerolls lets the player regenerate
+// whichever candidates they haven't already picked.
+// ---------------------------------------------
+
+const CANDIDATE_POOL_SIZE = 8;
+const MAX_REROLLS = 3;
+
+let candidatePool = [];   // the current list of choosable men
+let selectedIds = [];     // ids of candidates the player has picked
+let rerollsRemaining = MAX_REROLLS;
+
+// Builds a fresh pool of candidate men. Uses the same
+// createSettler building block as the old direct-generation path.
+function generateCandidatePool(count) {
+  const names = pickUniqueNames(count);
+  return names.map(createSettler);
+}
+
+// Renders the candidate pool as clickable cards.
+// Turns a candidate's suppliesBrought object into a short readable
+// line for their card, e.g. "Brings: 4 rations"
+function formatSupplies(supplies) {
+  const labels = {
+    rations: "rations",
+    rawFood: "raw food",
+    wood: "wood",
+    weapons: "weapons"
+  };
+  const parts = Object.keys(supplies).map(key => `${supplies[key]} ${labels[key]}`);
+  return `Brings: ${parts.join(", ")}`;
+}
+
+function renderCandidatePool() {
+  const container = document.getElementById("candidatePool");
+  container.innerHTML = "";
+
+  candidatePool.forEach(candidate => {
+    const isSelected = selectedIds.includes(candidate.id);
+    const card = document.createElement("div");
+    card.className = isSelected ? "candidate selected" : "candidate";
+    card.innerHTML = `
+      <div class="name">${candidate.name}</div>
+      <div class="skill">${candidate.skill}</div>
+      <div class="backstory">${candidate.name}, ${candidate.backstory}</div>
+      <div class="supplies">${formatSupplies(candidate.suppliesBrought)}</div>
+    `;
+    card.addEventListener("click", () => toggleCandidateSelection(candidate.id));
+    container.appendChild(card);
+  });
+
+  document.getElementById("selectionInstructions").textContent =
+    `Choose 5 men for the vanguard. Selected: ${selectedIds.length} / 5.`;
+
+  document.getElementById("rerollCount").textContent =
+    `Rerolls remaining: ${rerollsRemaining}`;
+
+  document.getElementById("rerollBtn").disabled = rerollsRemaining === 0;
+  document.getElementById("confirmVanguardBtn").disabled = selectedIds.length !== 5;
+}
+
+// Adds or removes a candidate from the selection when clicked.
+// Selection is capped at 5 — clicking a 6th candidate does nothing
+// until the player deselects one first.
+function toggleCandidateSelection(candidateId) {
+  if (selectedIds.includes(candidateId)) {
+    selectedIds = selectedIds.filter(id => id !== candidateId);
+  } else if (selectedIds.length < 5) {
+    selectedIds.push(candidateId);
+  }
+  renderCandidatePool();
+}
+
+// Rerolls only the candidates the player has NOT selected —
+// picked men stay locked in. Costs one of the limited rerolls.
+function rerollCandidates() {
+  if (rerollsRemaining === 0) return;
+
+  const keptCandidates = candidatePool.filter(c => selectedIds.includes(c.id));
+  const rerollCount = CANDIDATE_POOL_SIZE - keptCandidates.length;
+
+  const usedNames = keptCandidates.map(c => c.name);
+  const freshCandidates = generateFreshCandidates(rerollCount, usedNames);
+
+  candidatePool = [...keptCandidates, ...freshCandidates];
+  rerollsRemaining -= 1;
+
+  renderCandidatePool();
+}
+
+// Generates new candidates while avoiding name collisions
+// with names already in play (the kept candidates).
+function generateFreshCandidates(count, excludeNames) {
+  const availableNames = NAME_POOL.filter(n => !excludeNames.includes(n));
+  const shuffled = [...availableNames].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, count).map(createSettler);
+}
+
+// Called when the player confirms their 5 chosen men.
+// Moves the selected candidates into gameState, adds up what they
+// brought with them into the starting resource pool, and starts the game.
+function confirmVanguard() {
+  const chosen = candidatePool.filter(c => selectedIds.includes(c.id));
+  gameState.characters = chosen;
+
+  applyStartingSupplies(chosen);
+
+  document.getElementById("selectionScreen").style.display = "none";
+  document.getElementById("gameScreen").style.display = "block";
+
+  renderResources();
+  renderRoster();
+  updateStartDayAvailability();
+}
+
+// Sums up what the chosen vanguard brought with them and adds it
+// to the starting resource pool. Replaces the old fixed starting
+// amounts — what you bring now depends entirely on who you picked.
+function applyStartingSupplies(chosenCharacters) {
+  chosenCharacters.forEach(character => {
+    const supplies = character.suppliesBrought;
+    for (const resource in supplies) {
+      gameState.resources[resource] += supplies[resource];
+    }
+  });
+}
+
+
+// ---------------------------------------------
+// DISPLAY
+// Rendering is kept separate from simulation logic.
+// This function only reads gameState — it never changes it
+// (task changes happen in handleTaskChange, triggered by the dropdown).
+// ---------------------------------------------
+function renderRoster() {
+  const container = document.getElementById("roster");
+  container.innerHTML = "";
+
+  gameState.characters.forEach(character => {
+    const card = document.createElement("div");
+    card.className = character.alive ? "character" : "character deceased";
+
+    if (character.alive) {
+      const stage = hungerStage(character);
+      const hungerTag = stage ? `<div class="hunger-tag ${stage}">${stage}</div>` : "";
+
+      card.innerHTML = `
+        <div class="name">${character.name}</div>
+        <div class="skill">${character.skill} — carries a ${character.weaponType}</div>
+        ${hungerTag}
+        <div class="backstory">${character.name}, ${character.backstory}</div>
+        <div class="task-row">
+          <label>Task: </label>
+          <select data-character-id="${character.id}">
+            <option value="">-- assign a task --</option>
+            ${TASK_POOL.map(task =>
+              `<option value="${task}">${task}</option>`
+            ).join("")}
+          </select>
+        </div>
+      `;
+    } else {
+      card.innerHTML = `
+        <div class="name">${character.name} — dead</div>
+        <div class="backstory">${character.name}, ${character.backstory}</div>
+      `;
+    }
+
+    container.appendChild(card);
+  });
+
+  // Wire up dropdowns only for characters still alive.
+  container.querySelectorAll("select").forEach(dropdown => {
+    dropdown.addEventListener("change", handleTaskChange);
+  });
+}
+
+// Called whenever a player picks a task from a dropdown.
+// Updates the matching character's currentTask in gameState,
+// then checks whether every settler now has an assignment.
+// Fires when a task dropdown changes for a given settler. Updates
+// that settler's assignment in gameState, then re-checks whether
+// the Start Day button should be enabled.
+function handleTaskChange(event) {
+  const characterId = event.target.getAttribute("data-character-id");
+  const chosenTask = event.target.value;
+
+  const character = gameState.characters.find(c => c.id === characterId);
+  character.currentTask = chosenTask || null;
+
+  updateStartDayAvailability();
+}
+
+// Enables the Start Day button only once every living settler
+// has a task assigned. Shows a status message either way.
+function updateStartDayAvailability() {
+  const button = document.getElementById("startDayBtn");
+  const status = document.getElementById("assignmentStatus");
+
+  const unassignedCount = gameState.characters.filter(
+    c => c.alive && !c.currentTask
+  ).length;
+
+  if (unassignedCount === 0) {
+    button.disabled = false;
+    status.textContent = "All settlers assigned. Ready to start the day.";
+  } else {
+    button.disabled = true;
+    status.textContent = `${unassignedCount} settler(s) still need a task.`;
+  }
+}
+
+// ---------------------------------------------
+// DAY SIMULATION
+// Each function here resolves ONE task for ONE character
+// and returns a log line describing what happened.
+// None of these touch the DOM — display reads gameState after.
+// ---------------------------------------------
+
+// Returns true if this character's skill matches the given task.
+// Used to scale output — no task is skill-gated, skill only affects
+// how well a settler performs it. See design-rationale.md.
+function isSkilledAt(character, task) {
+  const skillForTask = {
+    "Build Palisade": "Carpenter",
+    "Hunt": "Hunter",
+    "Cook": "Cook",
+    "Forage": "Hunter",           // tracking/woodcraft covers foraging too
+    "Scout": "Hunter" // same skillset — a ranger reads the land
+    // Perimeter Watch has no output yet, so no skill mapping needed
+    // Woodcutting has no specialist — see resolveWoodcutting
+  };
+  return character.skill === skillForTask[task];
+}
+
+// ---------------------------------------------
+// YIELD ROLLING
+// Shared helpers for tasks that produce a resource in a range
+// rather than a fixed amount. See design-rationale.md.
+// ---------------------------------------------
+
+// Rolls a yield within [min, max] inclusive.
+function rollYield(min, max) {
+  return min + Math.floor(Math.random() * (max - min + 1));
+}
+
+// Picks a flavor-text quality tier based on where the roll landed
+// in its possible range, so the player gets a sense of "that went
+// badly" or "that went great" rather than just a number.
+function yieldQualityTier(amount, min, max) {
+  if (amount === 0) return "nothing";
+  const range = max - min || 1;
+  const position = (amount - min) / range; // 0 to 1
+  if (position < 0.34) return "poor";
+  if (position < 0.7) return "average";
+  return "great";
+}
+
+
+// Woodcutting: Carpenter and Laborer count as skilled. See
+// design-rationale.md for the reasoning behind that pairing.
+function resolveWoodcutting(character) {
+  const skilled = character.skill === "Carpenter" || character.skill === "Laborer";
+  const [min, max] = skilled ? [3, 6] : [0, 3];
+
+  if (gameState.environment.treesRemainingNearby === 0) {
+    return `${character.name} searched nearby but found no trees left standing — the camp will need to scout further afield.`;
+  }
+
+  const logs = rollYield(min, max);
+  const tier = yieldQualityTier(logs, min, max);
+  gameState.environment.treesRemainingNearby -= 1;
+  gameState.resources.wood += logs;
+
+  const flavor = {
+    nothing: `${character.name} felled a tree but the wood was rotten through — nothing usable came of it.`,
+    poor: `${character.name} felled a tree and managed only ${logs} rough logs from it.`,
+    average: `${character.name} felled a tree and worked it into ${logs} logs.`,
+    great: `${character.name} felled a tree and made unusually good use of it — ${logs} solid logs.`
+  };
+  return flavor[tier];
+}
+
+// Build Palisade: skill affects progress rate, not wood cost.
+// See design-rationale.md.
+function resolveBuildPalisade(character) {
+  const skilled = isSkilledAt(character, "Build Palisade");
+  const woodCost = skilled ? 3 : 3; // same either way — see design-rationale.md
+  const progressGain = skilled ? 15 : 6;
+
+  if (gameState.resources.wood < woodCost) {
+    return `${character.name} had no wood left to work with and made no progress on the palisade.`;
+  }
+
+  gameState.resources.wood -= woodCost;
+  gameState.resources.palisadeProgress = Math.min(
+    100,
+    gameState.resources.palisadeProgress + progressGain
+  );
+
+  if (skilled) {
+    return `${character.name} squared the timbers and set them true, working steadily along the line.`;
+  }
+  return `${character.name} wrestled the logs into place, gaps and all — slow, uneven progress.`;
+}
+
+// Hunt: skilled hunters get more raw food, reliably; unskilled
+// hunters get less. See design-rationale.md.
+function resolveHunt(character) {
+  const skilled = isSkilledAt(character, "Hunt");
+  const [min, max] = skilled ? [2, 6] : [0, 3];
+
+  const rawYield = rollYield(min, max);
+  const tier = yieldQualityTier(rawYield, min, max);
+  gameState.resources.rawFood += rawYield;
+
+  const game = ["a hare", "a brace of pheasant", "a young boar", "a deer"];
+  const catch_ = game[Math.floor(Math.random() * game.length)];
+
+  const flavor = {
+    nothing: `${character.name} tracked game for hours without a clean shot — nothing came of it.`,
+    poor: `${character.name} took ${catch_}, little else — ${rawYield} portions.`,
+    average: `${character.name} brought down ${catch_} — ${rawYield} portions of meat.`,
+    great: `${character.name} took ${catch_} and more besides — ${rawYield} portions of meat.`
+  };
+  return flavor[tier];
+}
+
+// Cook: converts raw food into rations; also converts forage food
+// into rations at 2:1. Does both in the same day if available.
+function resolveCook(character) {
+  const skilled = isSkilledAt(character, "Cook");
+  const conversionRate = skilled ? 0.9 : 0.5; // fraction of raw food successfully turned into rations
+
+  const rawFoodAvailable = gameState.resources.rawFood;
+  const forageFoodAvailable = gameState.resources.forageFood;
+
+  if (rawFoodAvailable === 0 && forageFoodAvailable === 0) {
+    return `${character.name} had nothing to cook and stood idle at the fire.`;
+  }
+
+  let rationsProduced = 0;
+  const notes = [];
+
+  if (rawFoodAvailable > 0) {
+    const fromRaw = Math.floor(rawFoodAvailable * conversionRate);
+    rationsProduced += fromRaw;
+    gameState.resources.rawFood = 0;
+    notes.push(`${fromRaw} from the day's meat`);
+  }
+
+  if (forageFoodAvailable > 0) {
+    const fromForage = Math.floor(forageFoodAvailable / 2);
+    rationsProduced += fromForage;
+    gameState.resources.forageFood -= fromForage * 2; // leftover odd unit stays, still edible raw
+    gameState.resources.forageFoodAge = 0; // whatever's left just got handled/reset
+    if (fromForage > 0) notes.push(`${fromForage} preserved from foraged stores`);
+  }
+
+  gameState.resources.rations += rationsProduced;
+
+  const detail = notes.join(" and ");
+  if (skilled) {
+    return `${character.name} worked the fire all day — ${rationsProduced} rations set aside (${detail}).`;
+  }
+  return `${character.name} tended the fire, though some of it scorched or went to waste — ${rationsProduced} rations set aside (${detail}).`;
+}
+
+// Perimeter Watch: no resource output — tracks position for
+// the scout wave mechanic (see resolveScoutWave).
+function resolvePerimeterWatch(character) {
+  character.position = "perimeter";
+  return `${character.name} stood watch at the perimeter. No trouble today.`;
+}
+
+// Forage: finds food that's edible without cooking. Also has a
+// chance of turning up more nearby trees. See design-rationale.md.
+function resolveForage(character) {
+  const skilled = isSkilledAt(character, "Forage");
+  const roll = Math.random();
+  const treeFindChance = 0.25;
+
+  if (roll < treeFindChance) {
+    const foundTrees = 3 + Math.floor(Math.random() * 4); // 3-6 more trees
+    gameState.environment.treesRemainingNearby += foundTrees;
+    return `${character.name} ranged out foraging and stumbled onto a stand of ${foundTrees} more trees worth working.`;
+  }
+
+  const [min, max] = skilled ? [2, 5] : [0, 2];
+  const foundFood = rollYield(min, max);
+  const tier = yieldQualityTier(foundFood, min, max);
+
+  if (foundFood > 0) {
+    gameState.resources.forageFood += foundFood;
+    gameState.resources.forageFoodAge = 0; // fresh food resets the spoilage clock
+  }
+
+  const forageItems = ["wild garlic and roots", "berries and mushrooms", "nuts and dandelion greens", "elderberries and watercress"];
+  const item = forageItems[Math.floor(Math.random() * forageItems.length)];
+
+  const flavor = {
+    nothing: `${character.name} searched the undergrowth all day and came back empty-handed.`,
+    poor: `${character.name} found a handful of ${item} — ${foundFood} portions.`,
+    average: `${character.name} brought back ${item}, ${foundFood} portions in all.`,
+    great: `${character.name} found ${item} in real abundance — ${foundFood} portions.`
+  };
+  return flavor[tier];
+}
+
+// Scout: Hunter and Soldier each estimate different stats (days vs.
+// count) with different accuracy; both present on the same day is a
+// "combo" that guarantees an accurate reading. Runs once per day
+// (not per-character) — see resolveScoutForEnemiesForDay, called
+// from runDay(). Full reasoning in design-rationale.md.
+
+// Rolls one estimate (count or days). Returns the true value if
+// accurate, otherwise a plausible-but-wrong value (over or under).
+function rollEstimate(trueValue, accuracyChance, maxSpread) {
+  if (Math.random() < accuracyChance) {
+    return { value: trueValue, accurate: true };
+  }
+  const error = 1 + Math.floor(Math.random() * maxSpread);
+  const direction = Math.random() < 0.5 ? -1 : 1;
+  const wrongValue = Math.max(1, trueValue + (error * direction));
+  return { value: wrongValue, accurate: false };
+}
+
+// Resolves Scout for the whole day at once — the Hunter+Soldier
+// combo needs to see every character assigned to the task together.
+function resolveScoutForEnemiesForDay(scoutingCharacters) {
+  if (scoutingCharacters.length === 0) return [];
+
+  const daysUntilWave = gameState.nextWaveDay - gameState.day;
+  const forecastCount = 3 + Math.floor(Math.random() * 3); // matches rollOutriderCount's range
+
+  const hasHunter = scoutingCharacters.some(c => c.skill === "Hunter");
+  const hasSoldier = scoutingCharacters.some(c => c.skill === "Soldier");
+  const comboActive = hasHunter && hasSoldier;
+
+  const entries = [];
+
+  if (comboActive) {
+    gameState.scoutWarning = {
+      estimatedDays: daysUntilWave, daysAccurate: true,
+      estimatedCount: forecastCount, countAccurate: true
+    };
+    entries.push(`A raiding party is out there, and this time there's no doubt about it — between tracking and trained instinct, the Hunter and Soldier together confirmed ${forecastCount} outriders, ${daysUntilWave} day(s) out. Sending both on the same scout was a good call.`);
+    return entries;
+  }
+
+  // No combo — each scout on the task contributes their own estimate.
+  // Flavor text describes what THIS specific roll actually landed on,
+  // not a fixed hedge — so the log never contradicts the resource bar.
+  scoutingCharacters.forEach(character => {
+    const isHunter = character.skill === "Hunter";
+    const isSoldier = character.skill === "Soldier";
+
+    const daysAccuracy = isHunter ? 0.8 : (isSoldier ? 0.45 : 0.3);
+    const countAccuracy = isSoldier ? 0.8 : (isHunter ? 0.45 : 0.3);
+
+    const daysEstimate = rollEstimate(daysUntilWave, daysAccuracy, 2);
+    const countEstimate = rollEstimate(forecastCount, countAccuracy, 2);
+
+    gameState.scoutWarning = {
+      estimatedDays: daysEstimate.value, daysAccurate: daysEstimate.accurate,
+      estimatedCount: countEstimate.value, countAccurate: countEstimate.accurate
+    };
+
+    // Each stat gets its own confident/uncertain phrasing, kept as
+    // explicit pairs rather than patched strings — easier to read,
+    // easier to extend later.
+    const confidentDays = `confident it's ${daysEstimate.value} day(s) before they show`;
+    const uncertainDays = `couldn't pin down how soon they'll arrive`;
+    const confidentCount = `certain there are ${countEstimate.value} of them`;
+    const uncertainCount = `couldn't get a solid count`;
+
+    if (isHunter) {
+      const days = daysEstimate.accurate ? confidentDays : uncertainDays;
+      const count = countEstimate.accurate ? "though the exact number's hard to judge from sign alone" : "and the size of the group is anyone's guess";
+      entries.push(`${character.name} found signs of a raiding party moving through the country — ${days}, ${count}.`);
+    } else if (isSoldier) {
+      const count = countEstimate.accurate ? confidentCount : uncertainCount;
+      const days = daysEstimate.accurate ? "and it looks like it'll be soon" : "though timing this kind of thing from a distance is guesswork";
+      entries.push(`${character.name} spotted a raiding party and sized them up — ${count}, ${days}.`);
+    } else {
+      entries.push(`${character.name} scouted for signs of trouble but has no real training for this — whatever he saw, the read is little better than a guess.`);
+    }
+  });
+
+  return entries;
+}
+
+// Routes a character to the correct resolver based on their task.
+// Note: "Scout" is deliberately NOT routed through here —
+// it's resolved once per day for all scouts at once, from runDay(),
+// since the Hunter+Soldier combo needs to see the full day's assignments.
+function resolveCharacterTask(character) {
+  switch (character.currentTask) {
+    case "Build Palisade": return resolveBuildPalisade(character);
+    case "Hunt": return resolveHunt(character);
+    case "Cook": return resolveCook(character);
+    case "Perimeter Watch": return resolvePerimeterWatch(character);
+    case "Woodcutting": return resolveWoodcutting(character);
+    case "Forage": return resolveForage(character);
+    case "Scout": return null; // handled separately, see resolveScoutForEnemiesForDay
+    default: return `${character.name} had no task and did nothing today.`;
+  }
+}
+
+// Forage food spoils if it sits unused for 2 days. Age resets to 0
+// whenever fresh forage food is gathered or cooked into rations
+// (see resolveForage and resolveCook). Runs once per day, before
+// consumption, so spoiled food is never "eaten" first.
+function applyForageSpoilage() {
+  if (gameState.resources.forageFood === 0) return null;
+
+  gameState.resources.forageFoodAge += 1;
+
+  if (gameState.resources.forageFoodAge >= 2) {
+    const lost = gameState.resources.forageFood;
+    gameState.resources.forageFood = 0;
+    gameState.resources.forageFoodAge = 0;
+    return `The foraged food store went bad before it could be used — ${lost} portions lost to spoilage.`;
+  }
+
+  return null;
+}
+
+// Feeds settlers in order of longest-without-food first. Draws from
+// forageFood before rations. Unfed settlers advance one hunger stage.
+function applyDailyConsumption() {
+  const eatingOrder = gameState.characters
+    .filter(c => c.alive)
+    .sort((a, b) => b.daysWithoutFood - a.daysWithoutFood);
+
+  let fed = 0;
+  let wentHungry = 0;
+
+  eatingOrder.forEach(character => {
+    if (gameState.resources.forageFood > 0) {
+      gameState.resources.forageFood -= 1;
+      character.daysWithoutFood = 0;
+      fed += 1;
+    } else if (gameState.resources.rations > 0) {
+      gameState.resources.rations -= 1;
+      character.daysWithoutFood = 0;
+      fed += 1;
+    } else {
+      character.daysWithoutFood += 1;
+      wentHungry += 1;
+    }
+  });
+
+  if (wentHungry === 0) {
+    return `Everyone ate today.`;
+  }
+  return `Food ran short — ${wentHungry} settler(s) went without food today.`;
+}
+
+// 3 consecutive days without food is fatal. 1-2 days show as
+// "hungry"/"starving" tags on the character card (see hungerStage).
+function checkStarvation() {
+  const notes = [];
+
+  gameState.characters
+    .filter(c => c.alive && c.daysWithoutFood >= 3)
+    .forEach(character => {
+      character.alive = false;
+      notes.push(`${character.name} did not wake this morning. Three days without food was more than he could bear.`);
+    });
+
+  return notes;
+}
+
+// Returns a hunger stage label for display, or null if the
+// character is fine and nothing needs to be shown.
+function hungerStage(character) {
+  if (character.daysWithoutFood >= 2) return "starving";
+  if (character.daysWithoutFood >= 1) return "hungry";
+  return null;
+}
+
+// ---------------------------------------------
+// SCOUT WAVE
+// A scheduled combat event (see nextWaveDay). Resolution depends
+// on watch status and palisade progress. Kept separate from the
+// daily task resolvers — an event, not a task outcome.
+// ---------------------------------------------
+
+// Returns true if any living character was assigned Perimeter
+// Watch today. (We check currentTask, not position, since
+// position gets set as a side effect of that task.)
+function hasSoldierOnWatch() {
+  return gameState.characters.some(
+    c => c.alive && c.currentTask === "Perimeter Watch"
+  );
+}
+
+// Rolls how many outriders show up (3 to 5).
+function rollOutriderCount() {
+  return 3 + Math.floor(Math.random() * 3); // 3 to 5
+}
+
+// Returns how many outriders the vanguard drove off. Weapons cap
+// the damage dealt; a watching Soldier adds a bonus. Weapons aren't
+// consumed but have a per-use chance of being damaged/lost.
+function resolveFightBack(outriderCount, watcherPresent) {
+  const weapons = gameState.resources.weapons;
+  if (weapons === 0) {
+    return 0; // nothing to fight back with — the camp can only endure
+  }
+
+  const soldierBonus = watcherPresent ? 2 : 0;
+  const weaponsAvailable = Math.min(weapons, outriderCount);
+  const driven = Math.min(outriderCount, weaponsAvailable + soldierBonus);
+
+  // Each weapon used has some chance of being damaged/broken in the fight.
+  let weaponsLost = 0;
+  for (let i = 0; i < weaponsAvailable; i++) {
+    if (Math.random() < 0.2) weaponsLost += 1; // 20% chance per weapon used
+  }
+  gameState.resources.weapons = Math.max(0, weapons - weaponsLost);
+
+  return driven;
+}
+
+// Base hit chance for a character, before palisade mitigation
+// (see palisadeMitigation). Highest for the watcher; scales down
+// as more outriders are driven off.
+function baseHitChance(character, watcherPresent, outridersRemaining, originalCount) {
+  const onWatch = character.currentTask === "Perimeter Watch";
+  const pressureRatio = outridersRemaining / originalCount; // fewer attackers left = less danger
+
+  let chance;
+  if (onWatch) {
+    chance = 0.5;
+  } else if (watcherPresent) {
+    chance = 0.05;
+  } else {
+    chance = 0.25;
+  }
+
+  return chance * pressureRatio;
+}
+
+// Palisade progress reduces hit chance (up to 50% at full wall).
+function palisadeMitigation(baseChance) {
+  const palisadeProgress = gameState.resources.palisadeProgress; // 0-100
+  const reduction = (palisadeProgress / 100) * 0.5; // up to 50% reduction at full wall
+  return Math.max(0, baseChance - (baseChance * reduction));
+}
+
+// If the camp is vulnerable (no watcher, low palisade), outriders
+// loot resources on the way out, in priority order (see lootOrder).
+function resolveResourceRisk(watcherPresent) {
+  const palisadeProgress = gameState.resources.palisadeProgress;
+  const campVulnerable = !watcherPresent && palisadeProgress < 30;
+
+  if (!campVulnerable) return null;
+
+  const lootBudget = 2 + Math.floor(Math.random() * 3); // 2-4 units taken total
+  let remaining = lootBudget;
+  const takenNotes = [];
+
+  const lootOrder = [
+    { key: "weapons", label: "weapons" },
+    { key: "rations", label: "rations" },
+    { key: "forageFood", label: "portions of foraged food" },
+    { key: "rawFood", label: "portions of raw food" }
+  ];
+
+  lootOrder.forEach(resource => {
+    if (remaining <= 0) return;
+    const available = gameState.resources[resource.key];
+    const taken = Math.min(available, remaining);
+    if (taken > 0) {
+      gameState.resources[resource.key] -= taken;
+      remaining -= taken;
+      takenNotes.push(`${taken} ${resource.label}`);
+    }
+  });
+
+  if (takenNotes.length === 0) return null;
+  return `In the chaos, outriders made off with ${takenNotes.join(", ")}.`;
+}
+
+// Resolves the scout wave: outriders arrive, the vanguard fights
+// back if armed, casualties and resource losses are applied, and
+// the whole encounter is logged like a report reaching the player.
+function resolveScoutWave() {
+  const entries = [];
+  const watcherPresent = hasSoldierOnWatch();
+  const outriderCount = rollOutriderCount();
+
+  entries.push(`${outriderCount} outriders were spotted moving through the treeline as the sun dropped.`);
+
+  if (watcherPresent) {
+    entries.push("The watch caught sight of them early, giving the camp a chance to brace.");
+  } else {
+    entries.push("No one was watching the perimeter — they closed in unseen.");
+  }
+
+  const driven = resolveFightBack(outriderCount, watcherPresent);
+  const outridersRemaining = Math.max(1, outriderCount - driven);
+
+  if (driven > 0) {
+    entries.push(`The vanguard fought back and drove off ${driven} of them.`);
+  } else if (gameState.resources.weapons === 0) {
+    entries.push("With no weapons on hand, the camp could do nothing but endure the raid.");
+  }
+
+  gameState.characters
+    .filter(c => c.alive)
+    .forEach(character => {
+      const caughtOffGuard = !watcherPresent && character.currentTask !== "Perimeter Watch";
+      // TODO: checks the shared weapons pool, not per-character
+      // ownership. See "Known Prototype Shortcuts" in design-rationale.md.
+      const noWeaponsAtAll = gameState.resources.weapons === 0;
+
+      if (caughtOffGuard && noWeaponsAtAll) {
+        character.alive = false;
+        entries.push(`${character.name} was caught in the open with nothing to defend himself — he did not survive the night.`);
+        return;
+      }
+
+      const chance = palisadeMitigation(
+        baseHitChance(character, watcherPresent, outridersRemaining, outriderCount)
+      );
+      const roll = Math.random();
+
+      if (roll < chance) {
+        character.alive = false;
+        entries.push(`${character.name} was caught in the open and did not survive the night.`);
+      }
+    });
+
+  const resourceNote = resolveResourceRisk(watcherPresent);
+  if (resourceNote) entries.push(resourceNote);
+
+  const survivors = gameState.characters.filter(c => c.alive).length;
+  entries.push(`When morning came, ${survivors} of the vanguard remained.`);
+
+  return entries;
+}
+// Runs one full day: tasks resolve (Scout handled separately as a
+// group), then consumption/starvation, then a wave if scheduled,
+// then win/loss conditions.
+function runDay() {
+  const entries = [];
+
+  const scoutingCharacters = gameState.characters.filter(
+    c => c.alive && c.currentTask === "Scout"
+  );
+
+  gameState.characters
+    .filter(c => c.alive && c.currentTask !== "Scout")
+    .forEach(character => {
+      entries.push(resolveCharacterTask(character));
+    });
+
+  entries.push(...resolveScoutForEnemiesForDay(scoutingCharacters));
+
+  const spoilageNote = applyForageSpoilage();
+  if (spoilageNote) entries.push(spoilageNote);
+
+  entries.push(applyDailyConsumption());
+
+  const starvationNotes = checkStarvation();
+  entries.push(...starvationNotes);
+
+  if (gameState.day === gameState.nextWaveDay) {
+    entries.push(...resolveScoutWave());
+    gameState.nextWaveDay = rollNextWaveDay(gameState.day);
+    gameState.scoutWarning = null; // any warning was for this wave; clear it
+  }
+
+  gameState.log.push({ day: gameState.day, entries: entries });
+
+  checkGameOver(entries);
+
+  gameState.day += 1;
+}
+
+// Checks whether the game has ended — victory if the palisade is
+// fully built, defeat if everyone has died (combat or starvation).
+// Appends a closing log line if either condition is met.
+function checkGameOver(entries) {
+  const survivors = gameState.characters.filter(c => c.alive).length;
+
+  if (survivors === 0) {
+    gameState.gameOver = true;
+    gameState.outcome = "defeat";
+    entries.push("The vanguard is no more. There is no one left to hold this ground.");
+    return;
+  }
+
+  if (gameState.resources.palisadeProgress >= 100) {
+    gameState.gameOver = true;
+    gameState.outcome = "victory";
+    entries.push("The palisade stands complete. The camp is secure — the vanguard has held.");
+  }
+}
+
+// Shows the current resource numbers at the top of the page.
+// Read-only view into gameState — never modifies it.
+function renderResources() {
+  const container = document.getElementById("resourceSummary");
+  const r = gameState.resources;
+  const e = gameState.environment;
+
+  let warningLine = "";
+  if (gameState.scoutWarning) {
+    const w = gameState.scoutWarning;
+    const countText = w.countAccurate ? `${w.estimatedCount} outriders` : "an uncertain number of outriders";
+    const daysText = w.daysAccurate ? `${w.estimatedDays} day(s) out` : "an uncertain distance out";
+    warningLine = `<div>⚠ A raiding party is coming: ${countText}, ${daysText}</div>`;
+  }
+
+  container.innerHTML = `
+    <div>Day: <span>${gameState.day}</span></div>
+    <div>Rations: <span>${r.rations}</span></div>
+    <div>Raw Food: <span>${r.rawFood}</span></div>
+    <div>Forage Food: <span>${r.forageFood}</span></div>
+    <div>Wood: <span>${r.wood}</span></div>
+    <div>Weapons: <span>${r.weapons}</span></div>
+    <div>Trees Left: <span>${e.treesRemainingNearby}</span></div>
+    <div>Palisade: <span>${r.palisadeProgress}%</span></div>
+    ${warningLine}
+  `;
+}
+
+// Shows the full day-by-day log, most recent day first.
+function renderLog() {
+  const container = document.getElementById("dayLog");
+  container.innerHTML = "";
+
+  [...gameState.log].reverse().forEach(dayRecord => {
+    const entryDiv = document.createElement("div");
+    entryDiv.className = "day-entry";
+    entryDiv.innerHTML = `
+      <div class="day-title">Day ${dayRecord.day}</div>
+      <ul>${dayRecord.entries.map(line => `<li>${line}</li>`).join("")}</ul>
+    `;
+    container.appendChild(entryDiv);
+  });
+}
+
+// Clears every character's task so the player has to
+// reassign for the next day. Keeps assignment deliberate
+// rather than carrying over automatically.
+function clearAllTasks() {
+  gameState.characters.filter(c => c.alive).forEach(c => c.currentTask = null);
+}
+
+// Called when the player clicks Start Day. Runs the simulation,
+// then refreshes every display and resets assignments for the next day.
+function startDay() {
+  runDay();
+  clearAllTasks();
+
+  renderResources();
+  renderLog();
+  renderRoster();
+  updateStartDayAvailability();
+  renderGameOverIfNeeded();
+}
+
+// Shows a clear victory/defeat banner once the game has ended,
+// and disables further play so the log stands as the final record.
+function renderGameOverIfNeeded() {
+  if (!gameState.gameOver) return;
+
+  const banner = document.getElementById("gameOverBanner");
+  const outcomeText = gameState.outcome === "victory"
+    ? "VICTORY — The palisade is complete. The vanguard held the ground."
+    : "DEFEAT — The vanguard has fallen.";
+  const bannerClass = gameState.outcome === "victory" ? "game-over victory" : "game-over defeat";
+
+  banner.innerHTML = `${outcomeText}<br><button id="resetBtn">Start a New Vanguard</button>`;
+  banner.className = bannerClass;
+  banner.style.display = "block";
+
+  document.getElementById("resetBtn").addEventListener("click", () => location.reload());
+  document.getElementById("startDayBtn").disabled = true;
+}
+
+
+// ---------------------------------------------
+// START
+// The game now begins on the selection screen. The actual
+// game (resources, roster, day loop) only initializes once
+// the player confirms their 5 chosen men in confirmVanguard().
+// ---------------------------------------------
+candidatePool = generateCandidatePool(CANDIDATE_POOL_SIZE);
+renderCandidatePool();
+
+document.getElementById("rerollBtn").addEventListener("click", rerollCandidates);
+document.getElementById("confirmVanguardBtn").addEventListener("click", confirmVanguard);
+document.getElementById("startDayBtn").addEventListener("click", startDay);
+
+</script>
+</body>
+</html>
