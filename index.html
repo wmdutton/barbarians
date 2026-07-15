@@ -1,8 +1,20 @@
 <!--
   Barbarians — Prototype
-  Version: 0.0.1.0
+  Version: 0.0.1.1
   Author: Mason Dutton
-  Last updated: 2026-07-13
+  Last updated: 2026-07-15
+
+  v0.0.1.1 changelog:
+  - Fixed: Laborer no longer rolls/displays a secondary skill (was
+    getting one despite the "moderate at everything" design intent).
+  - Fixed: Laborer can no longer be rolled as anyone ELSE's secondary
+    skill (was a dead roll — granted no bonus, wasted the slot).
+  - Removed: weaponType/assignWeaponType() — flavor-only, unused by
+    any system, cut for clarity ahead of the future combat rework.
+  - Refactored: all hardcoded colors and the font family moved into
+    a :root CSS custom properties block (design tokens). No visual
+    or behavioral change — same file, now maintainable from one
+    place. See /docs/tokens.md and /docs/components.md.
 
   Single-file HTML/CSS/JS prototype. No build step, no dependencies —
   open directly in a browser or serve as a static site (e.g. GitHub Pages).
@@ -21,44 +33,105 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Barbarians — Prototype</title>
 <style>
+  /* ---------------------------------------------
+     DESIGN TOKENS
+     Every color and font in this file is defined ONCE here and
+     referenced everywhere else via var(--token-name). This is a
+     CSS custom properties block (the :root selector targets the
+     <html> element, making these variables available anywhere in
+     the document). Change a value here and every element using it
+     updates automatically — no more hunting down five copies of
+     the same hex code.
+
+     Full reference, naming rationale, and "when to add a new
+     token" guidance: see /docs/tokens.md in the repo.
+     --------------------------------------------- */
+  :root {
+    /* Backgrounds — darkest to lightest */
+    --color-bg-page: #1b1b1b;         /* page background, dark selects/buttons text-on */
+    --color-bg-panel: #262626;        /* character cards, candidate cards, resource bar */
+    --color-bg-log-entry: #202020;    /* day log entries — slightly darker than panel */
+    --color-bg-candidate-selected: #33301f; /* selected candidate card tint */
+
+    /* Text */
+    --color-text-primary: #e8e0d0;    /* main body text */
+    --color-text-muted: #bdbdbd;      /* backstory text */
+    --color-text-disabled: #999;      /* disabled button text */
+    --color-text-footer: #666;        /* version footer */
+
+    /* Accent — the game's signature bronze/gold, used for
+       emphasis, primary buttons, and skill labels */
+    --color-accent-gold: #8a6d3b;     /* primary buttons, selected border, on-card accents */
+    --color-accent-gold-light: #c9a86a; /* skill labels, italic emphasis text, warnings */
+    --color-accent-gold-muted: #8a7a54; /* secondary-skill text — dimmer than primary gold */
+
+    /* Borders / dividers */
+    --color-border-default: #555;     /* default card/input border */
+    --color-border-subtle: #333;      /* footer divider */
+
+    /* Status — hunger tags */
+    --color-status-hungry-bg: #6b5a1f;
+    --color-status-hungry-text: #e6d6a6;
+    --color-status-starving-bg: #6b2f1f;
+    --color-status-starving-text: #e6b6a6;
+    --color-status-deceased: #6b1f1f; /* deceased card border */
+    --color-status-deceased-text: #a05050; /* deceased character name */
+
+    /* Status — game over banners */
+    --color-victory-bg: #2f4a2f;
+    --color-victory-text: #b6e6b6;
+    --color-victory-border: #5a8a5a;
+    --color-defeat-bg: #4a2f2f;
+    --color-defeat-text: #e6b6b6;
+    --color-defeat-border: #8a5a5a;
+
+    /* Status — misc accents */
+    --color-supplies-text: #7a9e7a;   /* "Brings: ..." line on candidate cards, greenish */
+
+    /* Fonts */
+    --font-body: Georgia, serif;      /* the only font family in use, tokenized so it's
+                                          a one-line change if that ever needs to differ
+                                          per-element (e.g. a future monospace debug view) */
+  }
+
   * {
     box-sizing: border-box;
   }
   body {
-    background: #1b1b1b;
-    color: #e8e0d0;
-    font-family: Georgia, serif;
+    background: var(--color-bg-page);
+    color: var(--color-text-primary);
+    font-family: var(--font-body);
     max-width: 700px;
     margin: 40px auto;
     padding: 0 16px;
     line-height: 1.5;
   }
   h1 {
-    border-bottom: 1px solid #555;
+    border-bottom: 1px solid var(--color-border-default);
     padding-bottom: 8px;
   }
   .character {
     margin-bottom: 18px;
     padding: 10px;
-    background: #262626;
-    border-left: 3px solid #8a6d3b;
+    background: var(--color-bg-panel);
+    border-left: 3px solid var(--color-accent-gold);
   }
   .character .name {
     font-weight: bold;
     font-size: 1.1em;
   }
   .character .skill {
-    color: #c9a86a;
+    color: var(--color-accent-gold-light);
     font-style: italic;
   }
   .character .secondary-skill {
-    color: #8a7a54;
+    color: var(--color-accent-gold-muted);
     font-style: italic;
     font-size: 0.8em;
   }
   .character .backstory {
     margin-top: 4px;
-    color: #bdbdbd;
+    color: var(--color-text-muted);
   }
   .hunger-tag {
     display: inline-block;
@@ -70,65 +143,65 @@
     border-radius: 3px;
   }
   .hunger-tag.hungry {
-    background: #6b5a1f;
-    color: #e6d6a6;
+    background: var(--color-status-hungry-bg);
+    color: var(--color-status-hungry-text);
   }
   .hunger-tag.starving {
-    background: #6b2f1f;
-    color: #e6b6a6;
+    background: var(--color-status-starving-bg);
+    color: var(--color-status-starving-text);
   }
   .character.deceased {
-    border-left-color: #6b1f1f;
+    border-left-color: var(--color-status-deceased);
     opacity: 0.6;
   }
   .character.deceased .name {
-    color: #a05050;
+    color: var(--color-status-deceased-text);
   }
   .character .task-row {
     margin-top: 8px;
   }
   select {
-    background: #1b1b1b;
-    color: #e8e0d0;
-    border: 1px solid #555;
+    background: var(--color-bg-page);
+    color: var(--color-text-primary);
+    border: 1px solid var(--color-border-default);
     padding: 8px;
-    font-family: Georgia, serif;
+    font-family: var(--font-body);
     font-size: 1em;
     max-width: 100%;
   }
   #startDayBtn {
     margin-top: 10px;
     padding: 12px 18px;
-    background: #8a6d3b;
-    color: #1b1b1b;
+    background: var(--color-accent-gold);
+    color: var(--color-bg-page);
     border: none;
-    font-family: Georgia, serif;
+    font-family: var(--font-body);
     font-weight: bold;
     font-size: 1em;
     cursor: pointer;
     width: 100%;
   }
   #startDayBtn:disabled {
-    background: #555;
-    color: #999;
+    background: var(--color-border-default);
+    color: var(--color-text-disabled);
     cursor: not-allowed;
   }
   #assignmentStatus {
     margin-top: 6px;
-    color: #c9a86a;
+    color: var(--color-accent-gold-light);
     font-style: italic;
   }
   #resourceSummary {
     margin-bottom: 20px;
     padding: 10px;
-    background: #262626;
+    background: var(--color-bg-panel);
     display: flex;
     flex-wrap: wrap;
     gap: 10px 20px;
     font-size: 0.95em;
   }
   #resourceSummary span {
-    color: #c9a86a;
+    color: var(--color-accent-gold-light);
   }
   .game-over {
     margin-bottom: 20px;
@@ -138,22 +211,22 @@
     text-align: center;
   }
   .game-over.victory {
-    background: #2f4a2f;
-    color: #b6e6b6;
-    border: 1px solid #5a8a5a;
+    background: var(--color-victory-bg);
+    color: var(--color-victory-text);
+    border: 1px solid var(--color-victory-border);
   }
   .game-over.defeat {
-    background: #4a2f2f;
-    color: #e6b6b6;
-    border: 1px solid #8a5a5a;
+    background: var(--color-defeat-bg);
+    color: var(--color-defeat-text);
+    border: 1px solid var(--color-defeat-border);
   }
   #resetBtn {
     margin-top: 10px;
     padding: 10px 16px;
-    background: #8a6d3b;
-    color: #1b1b1b;
+    background: var(--color-accent-gold);
+    color: var(--color-bg-page);
     border: none;
-    font-family: Georgia, serif;
+    font-family: var(--font-body);
     font-weight: bold;
     cursor: pointer;
   }
@@ -163,20 +236,20 @@
   .day-entry {
     margin-bottom: 14px;
     padding: 10px;
-    background: #202020;
-    border-left: 3px solid #555;
+    background: var(--color-bg-log-entry);
+    border-left: 3px solid var(--color-border-default);
   }
   .day-entry .day-title {
     font-weight: bold;
     margin-bottom: 6px;
-    color: #c9a86a;
+    color: var(--color-accent-gold-light);
   }
   .day-entry ul {
     margin: 0;
     padding-left: 20px;
   }
   #selectionInstructions {
-    color: #c9a86a;
+    color: var(--color-accent-gold-light);
     font-style: italic;
   }
   #candidatePool {
@@ -187,56 +260,56 @@
   .candidate {
     width: 200px;
     padding: 10px;
-    background: #262626;
-    border-left: 3px solid #555;
+    background: var(--color-bg-panel);
+    border-left: 3px solid var(--color-border-default);
     cursor: pointer;
   }
   .candidate.selected {
-    border-left-color: #8a6d3b;
-    background: #33301f;
+    border-left-color: var(--color-accent-gold);
+    background: var(--color-bg-candidate-selected);
   }
   .candidate .name {
     font-weight: bold;
   }
   .candidate .skill {
-    color: #c9a86a;
+    color: var(--color-accent-gold-light);
     font-style: italic;
     font-size: 0.9em;
   }
   .candidate .secondary-skill {
-    color: #8a7a54;
+    color: var(--color-accent-gold-muted);
     font-style: italic;
     font-size: 0.78em;
   }
   .candidate .backstory {
     margin-top: 4px;
     font-size: 0.85em;
-    color: #bdbdbd;
+    color: var(--color-text-muted);
   }
   .candidate .supplies {
     margin-top: 6px;
     font-size: 0.85em;
-    color: #7a9e7a;
+    color: var(--color-supplies-text);
   }
   #rerollBtn, #confirmVanguardBtn {
     margin-top: 14px;
     padding: 12px 18px;
-    background: #8a6d3b;
-    color: #1b1b1b;
+    background: var(--color-accent-gold);
+    color: var(--color-bg-page);
     border: none;
-    font-family: Georgia, serif;
+    font-family: var(--font-body);
     font-weight: bold;
     font-size: 1em;
     cursor: pointer;
   }
   #rerollBtn:disabled, #confirmVanguardBtn:disabled {
-    background: #555;
-    color: #999;
+    background: var(--color-border-default);
+    color: var(--color-text-disabled);
     cursor: not-allowed;
   }
   #rerollCount {
     margin-left: 10px;
-    color: #c9a86a;
+    color: var(--color-accent-gold-light);
     font-style: italic;
   }
   /* Version footer — small, unobtrusive, pinned to normal document flow
@@ -245,10 +318,10 @@
   #versionFooter {
     margin-top: 40px;
     padding-top: 10px;
-    border-top: 1px solid #333;
-    color: #666;
+    border-top: 1px solid var(--color-border-subtle);
+    color: var(--color-text-footer);
     font-size: 0.75em;
-    font-family: Georgia, serif;
+    font-family: var(--font-body);
     text-align: center;
   }
 
@@ -341,7 +414,7 @@
   <div id="dayLog"></div>
 </div>
 
-<div id="versionFooter">Barbarians — v0.0.1.0 — Mason Dutton — 2026-07-13</div>
+<div id="versionFooter">Barbarians — v0.0.1.1 — Mason Dutton — 2026-07-15</div>
 
 <script>
 
@@ -481,11 +554,22 @@ function rollSkill() {
 }
 
 // Rolls a Secondary skill, guaranteed different from the given
-// Primary skill. Every character has exactly one Primary and one
-// Secondary skill, fully random pairing — they don't need to relate
-// narratively (e.g. a Cook can roll Soldier as Secondary).
+// Primary skill. Every character EXCEPT Laborer has exactly one
+// Primary and one Secondary skill, fully random pairing — they
+// don't need to relate narratively (e.g. a Cook can roll Soldier
+// as Secondary).
+//
+// Laborer is excluded from the pool of possible Secondary rolls
+// entirely (not just zeroed out at resolution time) — Laborer is
+// already "moderate at everything" as a Primary, so letting it
+// also be handed out as a Secondary would be a dead roll for
+// whoever received it (getSkillTier() grants no bonus for a
+// Laborer secondary) and would silently waste that character's
+// secondary slot. See design-rationale.md (Laborer section).
+const SECONDARY_SKILL_POOL = ALL_SKILLS.filter(skill => skill !== "Laborer");
+
 function rollSecondarySkill(primarySkill) {
-  const options = ALL_SKILLS.filter(skill => skill !== primarySkill);
+  const options = SECONDARY_SKILL_POOL.filter(skill => skill !== primarySkill);
   const index = Math.floor(Math.random() * options.length);
   return options[index];
 }
@@ -547,38 +631,26 @@ function rollStartingSupplies(skill) {
   return supplies;
 }
 
-// Assigns a weapon type by skill (currently flavor-only — see
-// design-rationale.md re: upcoming combat rework).
-function assignWeaponType(skill) {
-  const weaponBySkill = {
-    Soldier: "sword",
-    Hunter: "bow",
-    Carpenter: "hand axe",
-    Cook: "kitchen knife",
-    Laborer: "dagger"
-  };
-  return weaponBySkill[skill] || "dagger";
-}
-
 // Builds one settler object. Every settler has a Primary skill
-// (labeled on the card, drives the best yield tier) and a Secondary
-// skill (shown smaller/unlabeled underneath, drives a moderate yield
-// tier). See design-rationale.md for the full tier resolution rule.
+// (labeled on the card, drives the best yield tier). Every settler
+// EXCEPT Laborer also has a Secondary skill (shown smaller/unlabeled
+// underneath, drives a moderate yield tier) — Laborer opts out of
+// the Primary/Secondary model entirely since it's already moderate
+// at everything by default. See design-rationale.md.
 function createSettler(name) {
   const skill = rollSkill();
-  const secondarySkill = rollSecondarySkill(skill);
+  const secondarySkill = skill === "Laborer" ? null : rollSecondarySkill(skill);
   return {
     id: name.toLowerCase(),
     name: name,
     skill: skill,                      // Primary skill
-    secondarySkill: secondarySkill,    // Secondary skill
+    secondarySkill: secondarySkill,    // Secondary skill, or null for Laborer
     backstory: pickBackstory(skill),
     alive: true,
     currentTask: null,  // assigned once the day simulation exists
     position: "campsite", // everyone starts safe, at the campsite
     suppliesBrought: rollStartingSupplies(skill), // what this candidate adds if chosen
     daysWithoutFood: 0,  // 0 = fine, 1 = hungry, 2 = starving, 3 = dead
-    weaponType: assignWeaponType(skill),
     armed: true // placeholder — see design-rationale.md
   };
 }
@@ -635,10 +707,15 @@ function renderCandidatePool() {
     const isSelected = selectedIds.includes(candidate.id);
     const card = document.createElement("div");
     card.className = isSelected ? "candidate selected" : "candidate";
+    // Secondary skill line is omitted entirely for Laborer (no
+    // secondary skill at all — see createSettler/rollSecondarySkill).
+    const secondaryLine = candidate.secondarySkill
+      ? `<div class="secondary-skill">${candidate.secondarySkill}</div>`
+      : "";
     card.innerHTML = `
       <div class="name">${candidate.name}</div>
       <div class="skill">${candidate.skill}</div>
-      <div class="secondary-skill">${candidate.secondarySkill}</div>
+      ${secondaryLine}
       <div class="backstory">${candidate.name}, ${candidate.backstory}</div>
       <div class="supplies">${formatSupplies(candidate.suppliesBrought)}</div>
     `;
@@ -740,11 +817,15 @@ function renderRoster() {
     if (character.alive) {
       const stage = hungerStage(character);
       const hungerTag = stage ? `<div class="hunger-tag ${stage}">${stage}</div>` : "";
+      // Secondary skill line is omitted entirely for Laborer.
+      const secondaryLine = character.secondarySkill
+        ? `<div class="secondary-skill">${character.secondarySkill}</div>`
+        : "";
 
       card.innerHTML = `
         <div class="name">${character.name}</div>
-        <div class="skill">${character.skill} — carries a ${character.weaponType}</div>
-        <div class="secondary-skill">${character.secondarySkill}</div>
+        <div class="skill">${character.skill}</div>
+        ${secondaryLine}
         ${hungerTag}
         <div class="backstory">${character.name}, ${character.backstory}</div>
         <div class="task-row">
@@ -842,8 +923,10 @@ const SKILL_FOR_TASK = {
 // Resolution order (first match wins):
 //   1. Primary skill is Laborer -> "secondary" tier, always.
 //   2. Primary skill matches this task -> "primary" tier.
-//   3. Secondary skill matches this task (and isn't Laborer,
-//      since Laborer-as-secondary grants no bonus) -> "secondary" tier.
+//   3. Secondary skill matches this task -> "secondary" tier.
+//      (Laborer can no longer be rolled as a Secondary at all —
+//      see rollSecondarySkill/SECONDARY_SKILL_POOL — so this
+//      check no longer needs to guard against it.)
 //   4. No match -> "base" tier.
 // ---------------------------------------------
 function getSkillTier(character, task) {
@@ -852,7 +935,7 @@ function getSkillTier(character, task) {
 
   if (character.skill === "Laborer") return "secondary";
   if (character.skill === matchingSkill) return "primary";
-  if (character.secondarySkill === matchingSkill && character.secondarySkill !== "Laborer") return "secondary";
+  if (character.secondarySkill === matchingSkill) return "secondary";
   return "base";
 }
 
