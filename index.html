@@ -1,12 +1,11 @@
 <!--
   Barbarians — Prototype
-  Version: 0.1.0.0
+  Version: 0.2.0.0
   Author: Mason Dutton
-  Last updated: 2026-07-19
+  Last updated: 2026-07-21
 
-  Nothing has shipped yet — version stays at 0.1.0.0 until a real
-  release milestone. Changelog is kept separately (not in this file);
-  see barbarians-changelog.md, attached to the project.
+  Full changelog is kept separately (not in this file); see
+  barbarians-changelog.md, attached to the project.
 
   Single-file HTML/CSS/JS prototype. No build step, no dependencies —
   open directly in a browser or serve as a static site (e.g. GitHub Pages).
@@ -386,7 +385,7 @@
 <body>
 
 <h1>Barbarians</h1>
-<div id="versionTag">v0.1.0.0 — prototype, unreleased</div>
+<div id="versionTag">v0.2.0.0 — prototype, unreleased</div>
 
 <div id="selectionScreen">
   <p id="selectionInstructions"></p>
@@ -443,9 +442,18 @@ const gameState = {
   // how many man-days are left to pay off the CURRENT stage only (not
   // the whole track). Rampart/Watchtower are intentionally out of easy
   // reach in a normal Phase 1 run — don't rebalance that away.
+  //
+  // hasAnnouncedStart: whether buildPalisadeFlavor has already said
+  // "work has only just begun" for the CURRENT stage. Prevents that
+  // line from repeating every single day a stage sits above the 66%
+  // remaining threshold — it should fire once, the first day work
+  // starts on a stage, then fall through to standard "coming along"
+  // phrasing for the rest of that band. Reset to false whenever
+  // stageIndex advances (see resolveBuildPalisade).
   fortification: {
     stageIndex: 0,
-    daysRemaining: 3 // Bailey Grounds costs 3 — see FORTIFICATION_STAGES
+    daysRemaining: 3, // Bailey Grounds costs 3 — see FORTIFICATION_STAGES
+    hasAnnouncedStart: false
   },
 
   characters: [], // filled in by generateSettlers()
@@ -967,8 +975,8 @@ function handleTaskChange(event) {
   updateStartDayAvailability();
 }
 
-// Enables the Start Day button only once every living settler
-// has a task assigned. Shows a status message either way.
+// Enables the Start Day button only once every living vanguard
+// member has a task assigned. Shows a status message either way.
 function updateStartDayAvailability() {
   const button = document.getElementById("startDayBtn");
   const status = document.getElementById("assignmentStatus");
@@ -979,10 +987,10 @@ function updateStartDayAvailability() {
 
   if (unassignedCount === 0) {
     button.disabled = false;
-    status.textContent = "All settlers assigned. Ready to start the day.";
+    status.textContent = "All of the vanguard is assigned. Ready to start the day.";
   } else {
     button.disabled = true;
-    status.textContent = `${unassignedCount} settler(s) still need a task.`;
+    status.textContent = `${unassignedCount} of the vanguard still need${unassignedCount === 1 ? "s" : ""} a task.`;
   }
 }
 
@@ -1003,7 +1011,20 @@ const SKILL_FOR_TASK = {
   "Cook": "Cook",
   "Forage": "Hunter",   // tracking/woodcraft covers foraging too
   "Scout": "Hunter"     // same skillset — a ranger reads the land
-  // Perimeter Watch has no output yet, so no skill mapping needed
+  // Perimeter Watch and Scout both also treat Soldier as primary —
+  // see SECONDARY_PRIMARY_TASK_SKILLS below. Two valid primaries
+  // for the same task is new as of this pass; getSkillTier checks
+  // both rather than this object supporting only one value per key.
+};
+
+// Tasks where a SECOND skill also counts as "primary", alongside
+// whatever SKILL_FOR_TASK says (or, for Perimeter Watch, as the
+// only primary skill — Watch has no SKILL_FOR_TASK entry at all).
+// Soldier reads terrain and threat the way a Hunter reads game —
+// different training, same practical result on these two tasks.
+const SECONDARY_PRIMARY_TASK_SKILLS = {
+  "Perimeter Watch": "Soldier",
+  "Scout": "Soldier"
 };
 
 // ---------------------------------------------
@@ -1035,7 +1056,9 @@ function getSkillTier(character, task) {
   const matchingSkill = task === "Build Palisade"
     ? currentFortificationSkill()
     : SKILL_FOR_TASK[task];
-  if (!matchingSkill) return "base"; // task has no skill mapping at all
+  const altPrimarySkill = SECONDARY_PRIMARY_TASK_SKILLS[task] || null;
+
+  if (!matchingSkill && !altPrimarySkill) return "base"; // task has no skill mapping at all
 
   // Laborer is normally capped at "secondary" everywhere (see design
   // doc: flat moderate tier, no primary bonus). But on Fortification
@@ -1043,9 +1066,10 @@ function getSkillTier(character, task) {
   // Bailey Grounds, Motte Ditch), that cap would wrongly demote them
   // below a Carpenter who has no business out-digging a Laborer here —
   // so check the direct match FIRST for this one case.
-  if (character.skill === matchingSkill) return "primary";
+  if (matchingSkill && character.skill === matchingSkill) return "primary";
+  if (altPrimarySkill && character.skill === altPrimarySkill) return "primary";
   if (character.skill === "Laborer") return "secondary";
-  if (character.secondarySkill === matchingSkill) return "secondary";
+  if (matchingSkill && character.secondarySkill === matchingSkill) return "secondary";
   return "base";
 }
 
@@ -1183,6 +1207,7 @@ function resolveBuildPalisade(character) {
     const nextStage = FORTIFICATION_STAGES[fort.stageIndex];
     fort.daysRemaining = nextStage ? nextStage.cost - overflow : 0;
     if (nextStage && fort.daysRemaining < 0) fort.daysRemaining = 0;
+    fort.hasAnnouncedStart = false; // new stage — "just begun" can fire once more
   }
 
   if (stageJustCompleted) {
@@ -1193,7 +1218,7 @@ function resolveBuildPalisade(character) {
     return `${character.name} finished the work: ${stageJustCompleted.doneLabel}.${nextLine}`;
   }
 
-  return buildPalisadeFlavor(character, tier, stage, fort.daysRemaining);
+  return buildPalisadeFlavor(character, tier, stage, fort);
 }
 
 // Flavor text for a day of Build Palisade work that didn't complete a
@@ -1202,12 +1227,25 @@ function resolveBuildPalisade(character) {
 // principle. Buckets remaining man-days into rough qualitative bands
 // per stage so text stays true regardless of how big the stage's total
 // cost is.
-function buildPalisadeFlavor(character, tier, stage, daysRemaining) {
+//
+// Updated 2026-07-21: takes the fort state object (not just
+// daysRemaining) so it can read/set hasAnnouncedStart. "Work has only
+// just begun" now fires once per stage — the first day worked while
+// still above the 66% threshold — then falls through to the standard
+// "coming along" phrasing for the rest of that band, instead of
+// repeating every day the stage sits above 66% remaining.
+function buildPalisadeFlavor(character, tier, stage, fort) {
+  const daysRemaining = fort.daysRemaining;
   const fractionLeft = daysRemaining / stage.cost;
 
   let stageDescriptor;
   if (fractionLeft > 0.66) {
-    stageDescriptor = `the ${stage.name.toLowerCase()} work has only just begun`;
+    if (!fort.hasAnnouncedStart) {
+      stageDescriptor = `the ${stage.name.toLowerCase()} work has only just begun`;
+      fort.hasAnnouncedStart = true;
+    } else {
+      stageDescriptor = `the ${stage.name.toLowerCase()} work continues`;
+    }
   } else if (fractionLeft > 0.33) {
     stageDescriptor = `the ${stage.name.toLowerCase()} work is coming along, but there's a fair way to go`;
   } else {
@@ -1240,6 +1278,36 @@ function buildPalisadeFlavor(character, tier, stage, daysRemaining) {
 
 // Hunt: Hunter (primary) gets more raw food, reliably; a moderate
 // tier sits between; base tier gets little. See design-rationale.md.
+//
+// Updated 2026-07-21: game description now scales WITH the actual
+// yield instead of being picked independently — previously `catch_`
+// was rolled from the full list regardless of `rawYield`, so a
+// "young boar" (should be a big haul) could show up next to "2
+// portions" while "a brace of pheasant" (should be small) could show
+// up next to "6 portions" — animal size and stated yield contradicted
+// each other. GAME_BY_YIELD below buckets the catch description to
+// match the actual number rolled.
+//
+// Also drops the redundant portion-count restatement — Hunt no
+// longer says "N portions" in its own line, since Cook's output the
+// same day already states the ration count derived from that raw
+// food (see resolveCook). Saying the number twice in one day's log,
+// once as "portions" and again as "rations," read as the game
+// repeating itself rather than describing two different things.
+// Hunt now just describes the catch; Cook is where the number lives.
+const GAME_BY_YIELD = [
+  { max: 1, options: ["a hare", "a handful of squirrels"] },
+  { max: 3, options: ["a brace of pheasant", "a couple of rabbits"] },
+  { max: 5, options: ["a young boar", "a good-sized doe"] },
+  { max: Infinity, options: ["a full-grown stag", "a big boar, well fed"] }
+];
+
+function describeCatch(rawYield) {
+  const bucket = GAME_BY_YIELD.find(b => rawYield <= b.max);
+  const options = bucket.options;
+  return options[Math.floor(Math.random() * options.length)];
+}
+
 function resolveHunt(character) {
   const tier = getSkillTier(character, "Hunt");
   const ranges = {
@@ -1250,19 +1318,24 @@ function resolveHunt(character) {
   const [min, max] = rangeForTier(tier, ranges);
 
   const rawYield = rollYield(min, max);
-  const qualityTier = yieldQualityTier(rawYield, min, max);
   gameState.resources.rawFood += rawYield;
 
-  const game = ["a hare", "a brace of pheasant", "a young boar", "a deer"];
-  const catch_ = game[Math.floor(Math.random() * game.length)];
+  if (rawYield === 0) {
+    return `${character.name} tracked game for hours without a clean shot — nothing came of it.`;
+  }
+
+  // qualityTier is computed after the zero-check above, since
+  // yieldQualityTier's "nothing" case is already handled by the
+  // early return — flavor below only ever needs poor/average/great.
+  const qualityTier = yieldQualityTier(rawYield, min, max);
+  const catch_ = describeCatch(rawYield);
 
   const flavor = {
-    nothing: `${character.name} tracked game for hours without a clean shot — nothing came of it.`,
-    poor: `${character.name} took ${catch_}, little else — ${rawYield} portions.`,
-    average: `${character.name} brought down ${catch_} — ${rawYield} portions of meat.`,
-    great: `${character.name} took ${catch_} and more besides — ${rawYield} portions of meat.`
+    poor: `${character.name} took ${catch_}, little else worth the effort.`,
+    average: `${character.name} brought down ${catch_}.`,
+    great: `${character.name} took ${catch_} — a strong day's hunting.`
   };
-  return flavor[qualityTier];
+  return flavor[qualityTier] || `${character.name} brought down ${catch_}.`;
 }
 
 // Cook: converts raw food into rations; also converts forage food
@@ -1315,9 +1388,17 @@ function resolveCook(character) {
 }
 
 // Perimeter Watch: no resource output — tracks position for
-// the scout wave mechanic (see resolveScoutWave).
+// the scout wave mechanic (see resolveScoutWave) and now also
+// grants a real skill tier (Soldier is primary here — see
+// SECONDARY_PRIMARY_TASK_SKILLS). Tier doesn't change day-to-day
+// text much since nothing happens without a raid, but a Soldier
+// watcher reads as more competent even on a quiet day.
 function resolvePerimeterWatch(character) {
   character.position = "perimeter";
+  const tier = getSkillTier(character, "Perimeter Watch");
+  if (tier === "primary") {
+    return `${character.name} kept a soldier's watch at the perimeter, eyes on the treeline. No trouble today.`;
+  }
   return `${character.name} stood watch at the perimeter. No trouble today.`;
 }
 
@@ -1385,8 +1466,13 @@ function rollEstimate(trueValue, accuracyChance, maxSpread) {
   return { value: wrongValue, accurate: false };
 }
 
-// Resolves Scout for the whole day at once — the Hunter+Soldier
-// combo needs to see every character assigned to the task together.
+// Resolves Scout for the whole day at once. Soldier and Hunter are
+// both valid solo scouts now (see SECONDARY_PRIMARY_TASK_SKILLS) —
+// neither requires the other. Sending both together is a bonus
+// (guaranteed accurate read), not a requirement to get any read at
+// all. This matters for a food-scarce game: a player who always
+// needs their Hunter hunting shouldn't be locked out of a working
+// Scout — Soldier alone covers it.
 function resolveScoutForEnemiesForDay(scoutingCharacters) {
   if (scoutingCharacters.length === 0) return [];
 
@@ -1415,10 +1501,15 @@ function resolveScoutForEnemiesForDay(scoutingCharacters) {
     const isHunter = character.skill === "Hunter";
     const isSoldier = character.skill === "Soldier";
 
-    const daysAccuracy = isHunter ? 0.8 : (isSoldier ? 0.45 : 0.3);
+    const daysAccuracy = isHunter ? 0.8 : (isSoldier ? 0.6 : 0.3);
     const countAccuracy = isSoldier ? 0.8 : (isHunter ? 0.45 : 0.3);
+    // Soldier's day-estimate miss is capped at "off by one" (maxSpread
+    // 1) rather than the wider miss everyone else risks (maxSpread 2)
+    // — a soldier reading enemy movement judges timing closely even
+    // when he's not dead-on. Hunter/Laborer keep the wider miss.
+    const daysMaxSpread = isSoldier ? 1 : 2;
 
-    const daysEstimate = rollEstimate(daysUntilWave, daysAccuracy, 2);
+    const daysEstimate = rollEstimate(daysUntilWave, daysAccuracy, daysMaxSpread);
     const countEstimate = rollEstimate(forecastCount, countAccuracy, 2);
 
     gameState.scoutWarning = {
@@ -1430,7 +1521,7 @@ function resolveScoutForEnemiesForDay(scoutingCharacters) {
     // explicit pairs rather than patched strings — easier to read,
     // easier to extend later.
     const confidentDays = `confident it's ${daysEstimate.value} day(s) before they show`;
-    const uncertainDays = `couldn't pin down how soon they'll arrive`;
+    const uncertainDays = `couldn't pin down how soon they'll arrive, but it won't be far off`;
     const confidentCount = `certain there are ${countEstimate.value} of them`;
     const uncertainCount = `couldn't get a solid count`;
 
@@ -1440,7 +1531,7 @@ function resolveScoutForEnemiesForDay(scoutingCharacters) {
       entries.push(`${character.name} found signs of a raiding party moving through the country — ${days}, ${count}.`);
     } else if (isSoldier) {
       const count = countEstimate.accurate ? confidentCount : uncertainCount;
-      const days = daysEstimate.accurate ? "and it looks like it'll be soon" : "though timing this kind of thing from a distance is guesswork";
+      const days = daysEstimate.accurate ? "and it looks like it'll be soon" : "though he'd stake his read within a day either way";
       entries.push(`${character.name} spotted a raiding party and sized them up — ${count}, ${days}.`);
     } else {
       entries.push(`${character.name} scouted for signs of trouble but has no real training for this — whatever he saw, the read is little better than a guess.`);
@@ -1514,7 +1605,7 @@ function applyDailyConsumption() {
   if (wentHungry === 0) {
     return `Everyone ate today.`;
   }
-  return `Food ran short — ${wentHungry} settler(s) went without food today.`;
+  return `Food ran short — ${wentHungry} of the vanguard went without food today.`;
 }
 
 // 3 consecutive days without food is fatal. 1-2 days show as
@@ -1547,12 +1638,25 @@ function hungerStage(character) {
 // daily task resolvers — an event, not a task outcome.
 // ---------------------------------------------
 
-// Returns true if any living character was assigned Perimeter
-// Watch today. (We check currentTask, not position, since
-// position gets set as a side effect of that task.)
-function hasSoldierOnWatch() {
+// Returns true if ANY living character was assigned Perimeter Watch
+// today, regardless of skill. Despite the old name, this was never
+// Soldier-specific — kept as watchPresent() for clarity now that
+// Soldier gets a real bonus ON TOP of this (see soldierOnWatch()
+// below). Watch-by-anyone still grants the baseline protections
+// (outdoor-worker warning, small fight-back bonus); Soldier-on-Watch
+// grants the bigger fight-back number specifically.
+function watchPresent() {
   return gameState.characters.some(
     c => c.alive && c.currentTask === "Perimeter Watch"
+  );
+}
+
+// Returns true only if the watcher is Soldier-primary-tier —
+// distinct from watchPresent() above.
+function soldierOnWatch() {
+  return gameState.characters.some(
+    c => c.alive && c.currentTask === "Perimeter Watch"
+      && getSkillTier(c, "Perimeter Watch") === "primary"
   );
 }
 
@@ -1562,24 +1666,23 @@ function rollOutriderCount() {
 }
 
 // Returns how many outriders the vanguard drove off. Weapons cap
-// the damage dealt; a watching Soldier adds a bonus. Weapons aren't
-// consumed but have a per-use chance of being damaged/lost.
-function resolveFightBack(outriderCount, watcherPresent) {
+// the damage dealt; whoever's on Watch adds a bonus, bigger if
+// that watcher is Soldier-primary-tier. Weapons no longer have any
+// chance of being lost from use — they're durable equipment (matches
+// the stated intent in design-rationale.md that was previously
+// contradicted by a 20%-per-use loss roll). The ONLY way weapons
+// now leave the camp is theft during a raid where the camp was
+// caught vulnerable — see resolveResourceRisk.
+function resolveFightBack(outriderCount, anyWatcher, soldierWatching) {
   const weapons = gameState.resources.weapons;
   if (weapons === 0) {
     return 0; // nothing to fight back with — the camp can only endure
   }
 
-  const soldierBonus = watcherPresent ? 2 : 0;
+  // Soldier-on-Watch: +3. Anyone else on Watch: +1. No watcher: +0.
+  const watchBonus = soldierWatching ? 3 : (anyWatcher ? 1 : 0);
   const weaponsAvailable = Math.min(weapons, outriderCount);
-  const driven = Math.min(outriderCount, weaponsAvailable + soldierBonus);
-
-  // Each weapon used has some chance of being damaged/broken in the fight.
-  let weaponsLost = 0;
-  for (let i = 0; i < weaponsAvailable; i++) {
-    if (Math.random() < 0.2) weaponsLost += 1; // 20% chance per weapon used
-  }
-  gameState.resources.weapons = Math.max(0, weapons - weaponsLost);
+  const driven = Math.min(outriderCount, weaponsAvailable + watchBonus);
 
   return driven;
 }
@@ -1587,15 +1690,27 @@ function resolveFightBack(outriderCount, watcherPresent) {
 // Base hit chance for a character, before palisade mitigation
 // (see palisadeMitigation). Highest for the watcher; scales down
 // as more outriders are driven off.
-function baseHitChance(character, watcherPresent, outridersRemaining, originalCount) {
+//
+// Updated 2026-07-21: now takes soldierWatching, so a Soldier's
+// mechanical edge shows up in personal risk too, not just in
+// resolveFightBack's group-level driven-off count. Two spots use it:
+//   - The watcher's own risk: a Soldier standing watch is still the
+//     one facing outriders directly (same exposure), but his training
+//     means he's meaningfully less likely to actually be hit than an
+//     untrained watcher standing the same post.
+//   - A warned outdoor worker's risk: called back by a Soldier's
+//     watch specifically is a sharper warning (he reads the land/
+//     movement better — same skill that makes his Scout read tighter)
+//     than being called back by a non-Soldier watcher.
+function baseHitChance(character, watcherPresent, outridersRemaining, originalCount, soldierWatching) {
   const onWatch = character.currentTask === "Perimeter Watch";
   const pressureRatio = outridersRemaining / originalCount; // fewer attackers left = less danger
 
   let chance;
   if (onWatch) {
-    chance = 0.5;
+    chance = soldierWatching ? 0.35 : 0.5; // trained watcher, same exposure, better odds
   } else if (watcherPresent) {
-    chance = 0.05;
+    chance = soldierWatching ? 0.03 : 0.05; // warned-by-soldier reads sharper than warned-by-anyone
   } else {
     chance = 0.25;
   }
@@ -1636,10 +1751,18 @@ function palisadeMitigation(baseChance) {
 
 // If the camp is vulnerable (no watcher, low palisade), outriders
 // loot resources on the way out, in priority order (see lootOrder).
-function resolveResourceRisk(watcherPresent) {
-  const campVulnerable = !watcherPresent && fortificationProgressFraction() < 0.30;
+// ALWAYS returns a line now, every raid — theft (or its absence) was
+// previously silent whenever the camp wasn't "vulnerable" or had
+// nothing left to take, which made it impossible for the player to
+// tell "nothing was stolen" from "I just didn't notice the line."
+// Weapons can now ONLY be lost this way (see resolveFightBack) — this
+// function carries real weight it didn't before.
+function resolveResourceRisk(anyWatcher) {
+  const campVulnerable = !anyWatcher && fortificationProgressFraction() < 0.30;
 
-  if (!campVulnerable) return null;
+  if (!campVulnerable) {
+    return "The camp's stores went untouched — nothing was taken in the raid.";
+  }
 
   const lootBudget = 2 + Math.floor(Math.random() * 3); // 2-4 units taken total
   let remaining = lootBudget;
@@ -1663,62 +1786,115 @@ function resolveResourceRisk(watcherPresent) {
     }
   });
 
-  if (takenNotes.length === 0) return null;
+  if (takenNotes.length === 0) {
+    return "Outriders rifled through the camp but found nothing left worth taking.";
+  }
   return `In the chaos, outriders made off with ${takenNotes.join(", ")}.`;
 }
+
+// Tasks that take a character outside the camp's immediate footprint.
+// A manned Watch (anyone, not just Soldier) warns these characters to
+// fall back before a raid lands — they don't get the "caught in the
+// open with nothing to defend himself" auto-kill, and roll at the
+// unwatched-but-in-camp hit chance instead of full open-ground risk.
+// Perimeter Watch itself is not in this list — the watcher is the one
+// person who's already braced, not someone who needs warning.
+const OUTDOOR_TASKS = ["Hunt", "Forage", "Scout", "Woodcutting"];
 
 // Resolves the scout wave: outriders arrive, the vanguard fights
 // back if armed, casualties and resource losses are applied, and
 // the whole encounter is logged like a report reaching the player.
 function resolveScoutWave() {
   const entries = [];
-  const watcherPresent = hasSoldierOnWatch();
+  const anyWatcher = watchPresent();
+  const soldierWatching = soldierOnWatch();
   const outriderCount = rollOutriderCount();
 
   entries.push(`${outriderCount} outriders were spotted moving through the treeline as the sun dropped.`);
 
-  if (watcherPresent) {
+  if (soldierWatching) {
+    entries.push("The soldier on watch caught sight of them early and had the camp braced before they closed the distance.");
+  } else if (anyWatcher) {
     entries.push("The watch caught sight of them early, giving the camp a chance to brace.");
   } else {
     entries.push("No one was watching the perimeter — they closed in unseen.");
   }
 
-  const driven = resolveFightBack(outriderCount, watcherPresent);
-  const outridersRemaining = Math.max(1, outriderCount - driven);
+  const driven = resolveFightBack(outriderCount, anyWatcher, soldierWatching);
+  // Updated 2026-07-21: no longer floors outridersRemaining at 1. The
+  // old Math.max(1, ...) meant that driving off ALL attackers still
+  // left 1 "remaining" internally for pressureRatio's math — which
+  // silently contradicted the log line saying every attacker was
+  // driven off. That's the root of the "5 outriders approached, only
+  // 4 driven off, what happened to the 5th?" bug: the 5th wasn't
+  // unaccounted for in the text, but the internal math was quietly
+  // treating it as still out there. outridersRemaining can now
+  // legitimately reach 0, and pressureRatio (outridersRemaining /
+  // originalCount) correctly zeroes out remaining danger to anyone
+  // not already resolved above — no attackers left means no attackers
+  // left, full stop.
+  const outridersRemaining = Math.max(0, outriderCount - driven);
+  const allDrivenOff = driven >= outriderCount;
 
-  if (driven > 0) {
+  if (allDrivenOff) {
+    entries.push(`The vanguard fought back and drove off all ${driven} of them — the raid was repelled outright.`);
+  } else if (driven > 0) {
     entries.push(`The vanguard fought back and drove off ${driven} of them.`);
   } else if (gameState.resources.weapons === 0) {
     entries.push("With no weapons on hand, the camp could do nothing but endure the raid.");
   }
 
+  let warnedAnyone = false;
+
   gameState.characters
     .filter(c => c.alive)
     .forEach(character => {
-      const caughtOffGuard = !watcherPresent && character.currentTask !== "Perimeter Watch";
+      const isOutdoors = OUTDOOR_TASKS.includes(character.currentTask);
+      // Warned: was outside camp, but a manned Watch (any watcher)
+      // called them back before the raid landed. They still face
+      // some risk — running back in the dark isn't free — but they
+      // are never an automatic kill, and their odds match an
+      // unwatched-in-camp character rather than someone caught fully
+      // in the open.
+      const warned = isOutdoors && anyWatcher;
+      // Caught fully in the open: was outside camp AND no one was
+      // watching to call them back.
+      const caughtInOpen = isOutdoors && !anyWatcher;
+
+      if (warned) warnedAnyone = true;
+
       // TODO: checks the shared weapons pool, not per-character
       // ownership. See "Known Prototype Shortcuts" in design-rationale.md.
       const noWeaponsAtAll = gameState.resources.weapons === 0;
 
-      if (caughtOffGuard && noWeaponsAtAll) {
+      if (caughtInOpen && noWeaponsAtAll) {
         character.alive = false;
         entries.push(`${character.name} was caught in the open with nothing to defend himself — he did not survive the night.`);
         return;
       }
 
       const chance = palisadeMitigation(
-        baseHitChance(character, watcherPresent, outridersRemaining, outriderCount)
+        baseHitChance(character, anyWatcher, outridersRemaining, outriderCount, soldierWatching)
       );
       const roll = Math.random();
 
       if (roll < chance) {
         character.alive = false;
-        entries.push(`${character.name} was caught in the open and did not survive the night.`);
+        const cause = caughtInOpen
+          ? `${character.name} was caught in the open and did not survive the night.`
+          : `${character.name} didn't make it back in time and was caught at the edge of camp.`;
+        entries.push(cause);
       }
     });
 
-  const resourceNote = resolveResourceRisk(watcherPresent);
-  if (resourceNote) entries.push(resourceNote);
+  if (warnedAnyone) {
+    entries.push("The call to fall back reached the fields and treeline in time — those out working the land made it back inside the camp before the worst of it.");
+  }
+
+  // Loot outcome always reports, positive or negative, and always
+  // sits right here — same slot every wave — so the player can find
+  // it without hunting through casualty text. See resolveResourceRisk.
+  entries.push(resolveResourceRisk(anyWatcher));
 
   const survivors = gameState.characters.filter(c => c.alive).length;
   entries.push(`When morning came, ${survivors} of the vanguard remained.`);
