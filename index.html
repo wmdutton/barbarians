@@ -1,20 +1,12 @@
 <!--
   Barbarians — Prototype
-  Version: 0.0.1.1
+  Version: 0.1.0.0
   Author: Mason Dutton
-  Last updated: 2026-07-15
+  Last updated: 2026-07-19
 
-  v0.0.1.1 changelog:
-  - Fixed: Laborer no longer rolls/displays a secondary skill (was
-    getting one despite the "moderate at everything" design intent).
-  - Fixed: Laborer can no longer be rolled as anyone ELSE's secondary
-    skill (was a dead roll — granted no bonus, wasted the slot).
-  - Removed: weaponType/assignWeaponType() — flavor-only, unused by
-    any system, cut for clarity ahead of the future combat rework.
-  - Refactored: all hardcoded colors and the font family moved into
-    a :root CSS custom properties block (design tokens). No visual
-    or behavioral change — same file, now maintainable from one
-    place. See /docs/tokens.md and /docs/components.md.
+  Nothing has shipped yet — version stays at 0.1.0.0 until a real
+  release milestone. Changelog is kept separately (not in this file);
+  see barbarians-changelog.md, attached to the project.
 
   Single-file HTML/CSS/JS prototype. No build step, no dependencies —
   open directly in a browser or serve as a static site (e.g. GitHub Pages).
@@ -312,13 +304,12 @@
     color: var(--color-accent-gold-light);
     font-style: italic;
   }
-  /* Version footer — small, unobtrusive, pinned to normal document flow
-     at the bottom of the page (not fixed/sticky, so it never covers
-     game content on short viewports). */
-  #versionFooter {
-    margin-top: 40px;
-    padding-top: 10px;
-    border-top: 1px solid var(--color-border-subtle);
+  /* Version tag — small, unobtrusive line directly under the game
+     title. Nothing has shipped yet, so this stays a plain subtitle
+     rather than a pinned page footer. */
+  #versionTag {
+    margin-top: -8px;
+    margin-bottom: 24px;
     color: var(--color-text-footer);
     font-size: 0.75em;
     font-family: var(--font-body);
@@ -395,6 +386,7 @@
 <body>
 
 <h1>Barbarians</h1>
+<div id="versionTag">v0.1.0.0 — prototype, unreleased</div>
 
 <div id="selectionScreen">
   <p id="selectionInstructions"></p>
@@ -413,8 +405,6 @@
   <div id="assignmentStatus"></div>
   <div id="dayLog"></div>
 </div>
-
-<div id="versionFooter">Barbarians — v0.0.1.1 — Mason Dutton — 2026-07-15</div>
 
 <script>
 
@@ -445,8 +435,17 @@ const gameState = {
     forageFood: 0,  // foraged food — edible directly, no cooking needed, but spoils fast
     forageFoodAge: 0, // days since the current forage food stock was gathered — spoils at 2
     wood: 0,        // set by whichever Carpenters the player picks
-    weapons: 0,     // set by whichever Soldiers the player picks
-    palisadeProgress: 0 // percent, 0-100 — reflects the log wall/stakes, blunts attacks even unfinished
+    weapons: 0     // set by whichever Soldiers the player picks
+  },
+
+  // Fortification track — six stages, man-day costs per the design doc.
+  // stageIndex points into FORTIFICATION_STAGES below; daysRemaining is
+  // how many man-days are left to pay off the CURRENT stage only (not
+  // the whole track). Rampart/Watchtower are intentionally out of easy
+  // reach in a normal Phase 1 run — don't rebalance that away.
+  fortification: {
+    stageIndex: 0,
+    daysRemaining: 3 // Bailey Grounds costs 3 — see FORTIFICATION_STAGES
   },
 
   characters: [], // filled in by generateSettlers()
@@ -533,6 +532,104 @@ const ALL_SKILLS = ["Carpenter", "Hunter", "Cook", "Soldier", "Laborer"];
 // No task is skill-gated — any settler can attempt any task.
 // Skill only affects how well they do it (see resolve* functions).
 const TASK_POOL = ["Woodcutting", "Build Palisade", "Hunt", "Cook", "Perimeter Watch", "Forage", "Scout"];
+
+// Player-facing label for a task in the assignment dropdown. Every
+// task shows its own name verbatim EXCEPT "Build Palisade" — that
+// internal task id stays fixed (it's what resolveDayForCharacter,
+// SKILL_FOR_TASK, etc. all key off of), but the label shown to the
+// player reflects whichever Fortification stage is currently active,
+// so the dropdown reads "Dig Motte Ditch" while that stage is live,
+// then "Raise Palisade Stakes" once it advances, etc.
+const FORTIFICATION_TASK_VERB = {
+  "Bailey Grounds": "Clear Bailey Grounds",
+  "Motte Ditch": "Dig Motte Ditch",
+  "Palisade Stakes": "Raise Palisade Stakes",
+  "Bridgeway": "Set Bridgeway",
+  "Ramparts": "Build Ramparts",
+  "Watchtower": "Erect Watchtower"
+};
+
+function taskDisplayLabel(task) {
+  if (task !== "Build Palisade") return task;
+  const stage = FORTIFICATION_STAGES[gameState.fortification.stageIndex];
+  return stage ? FORTIFICATION_TASK_VERB[stage.name] : "Fortification (complete)";
+}
+
+// Fortification track — locked man-day costs from the design doc.
+// Each stage's `cost` is how many man-days it takes to clear on its
+// own (not cumulative). Total across all six is 50 man-days.
+// `name` is a single noun, shown as the current stage/task label.
+// `doneLabel` is the flavor phrase used once that stage is behind you.
+// `skill` is which skill counts as Seasoned/"primary" for THIS stage
+// specifically — earthwork stages (Bailey Grounds, Motte Ditch) favor
+// Laborer's generic hard-labor competence over Carpenter's specialized
+// woodworking; timber stages favor Carpenter. TBD: naming may move to
+// more period-accurate terms later — noted, not blocking this build.
+// `woodCost` is the wood spent per day of work on this stage. Earthwork
+// stages need none — you don't need timber to clear ground or dig a
+// ditch. Wood only enters the track once actual construction starts,
+// at Palisade Stakes.
+// `failureFlavor` is a small pool of flavor lines used on the rare day
+// a stage's work is lost to bad luck (see FORTIFICATION_FAILURE_CHANCE
+// and resolveBuildPalisade). Quick placeholder set — to be refined in
+// a design chat; do not treat these numbers/lines as locked.
+const FORTIFICATION_STAGES = [
+  {
+    name: "Bailey Grounds", cost: 3, skill: "Laborer", woodCost: 0,
+    doneLabel: "the bailey grounds are cleared",
+    failureFlavor: [
+      "the ground turned out stonier than it looked — the clearing work was lost to it",
+      "a sudden downpour turned the cleared patch back to mud and root-tangle overnight"
+    ]
+  },
+  {
+    name: "Motte Ditch", cost: 6, skill: "Laborer", woodCost: 0,
+    doneLabel: "the motte ditch is dug",
+    failureFlavor: [
+      "the ditch wall collapsed back in on itself before it could be shored up",
+      "they struck rock a foot down and had to abandon the day's cut entirely"
+    ]
+  },
+  {
+    name: "Palisade Stakes", cost: 8, skill: "Carpenter", woodCost: 3,
+    doneLabel: "the palisade stakes are raised",
+    failureFlavor: [
+      "the timber split wrong under the axe — a day's stakes, ruined",
+      "the ground here won't hold a stake true; the line had to be pulled and restarted"
+    ]
+  },
+  {
+    name: "Bridgeway", cost: 6, skill: "Carpenter", woodCost: 3,
+    doneLabel: "the bridgeway is set",
+    failureFlavor: [
+      "the crossbeam cracked under its own weight before it was even seated",
+      "the footing gave way in the wet ground and the half-built span had to be torn out"
+    ]
+  },
+  {
+    name: "Ramparts", cost: 12, skill: "Carpenter", woodCost: 3,
+    doneLabel: "the ramparts stand",
+    failureFlavor: [
+      "a section of packed earth slumped overnight, undoing days of building",
+      "green timber warped in the heat and had to be pulled and replaced"
+    ]
+  },
+  {
+    name: "Watchtower", cost: 15, skill: "Carpenter", woodCost: 3,
+    doneLabel: "the watchtower is raised",
+    failureFlavor: [
+      "a support beam proved rotten at the core and the frame had to come back down",
+      "high winds took the half-built frame apart before it could be braced"
+    ]
+  }
+];
+
+// Flat per-attempt chance that a day of Fortification labor is lost
+// entirely to bad luck (rot, weather, bad ground) instead of
+// contributing man-days. Quick placeholder — same chance at every
+// stage/tier for now. To be refined (per-stage odds, skill mitigation,
+// etc.) in a design chat; not a locked number.
+const FORTIFICATION_FAILURE_CHANCE = 0.1;
 
 
 // ---------------------------------------------
@@ -833,7 +930,7 @@ function renderRoster() {
           <select data-character-id="${character.id}">
             <option value="">-- assign a task --</option>
             ${TASK_POOL.map(task =>
-              `<option value="${task}">${task}</option>`
+              `<option value="${task}">${taskDisplayLabel(task)}</option>`
             ).join("")}
           </select>
         </div>
@@ -930,13 +1027,34 @@ const SKILL_FOR_TASK = {
 //   4. No match -> "base" tier.
 // ---------------------------------------------
 function getSkillTier(character, task) {
-  const matchingSkill = SKILL_FOR_TASK[task];
+  // Build Palisade is a special case: which skill counts as "primary"
+  // changes depending on which Fortification stage is currently
+  // active (earthwork stages favor Laborer, timber stages favor
+  // Carpenter) — see FORTIFICATION_STAGES' `skill` field. Every other
+  // task uses the flat SKILL_FOR_TASK lookup below.
+  const matchingSkill = task === "Build Palisade"
+    ? currentFortificationSkill()
+    : SKILL_FOR_TASK[task];
   if (!matchingSkill) return "base"; // task has no skill mapping at all
 
-  if (character.skill === "Laborer") return "secondary";
+  // Laborer is normally capped at "secondary" everywhere (see design
+  // doc: flat moderate tier, no primary bonus). But on Fortification
+  // stages where Laborer IS the stage's matching skill (earthwork:
+  // Bailey Grounds, Motte Ditch), that cap would wrongly demote them
+  // below a Carpenter who has no business out-digging a Laborer here —
+  // so check the direct match FIRST for this one case.
   if (character.skill === matchingSkill) return "primary";
+  if (character.skill === "Laborer") return "secondary";
   if (character.secondarySkill === matchingSkill) return "secondary";
   return "base";
+}
+
+// Which skill is "primary" for whichever Fortification stage is
+// currently active. Returns null once the whole track is complete
+// (no stage left to match against).
+function currentFortificationSkill() {
+  const stage = FORTIFICATION_STAGES[gameState.fortification.stageIndex];
+  return stage ? stage.skill : null;
 }
 
 // ---------------------------------------------
@@ -1003,36 +1121,121 @@ function resolveWoodcutting(character) {
   return flavor[qualityTier];
 }
 
-// Build Palisade: skill affects progress rate, not wood cost.
-// Three tiers of progress speed now instead of two. See
-// design-rationale.md.
+// Build Palisade: man-day accounting against the Fortification track's
+// locked stage costs (see FORTIFICATION_STAGES). Skill tier changes how
+// many man-days a character contributes in a day — it does not roll
+// for success/failure on its own. A small flat chance
+// (FORTIFICATION_FAILURE_CHANCE) exists for a day's labor to be lost
+// entirely to bad luck (rot, bad ground, weather) instead — see stage
+// `failureFlavor`. Tiers are 1 / 0.75 / 0.5 man-days per day rather
+// than a steeper spread: with the Carpenter almost always assigned
+// here in practice, the full 50-day track should take roughly 50 days
+// even at Seasoned tier, not a fraction of that.
 function resolveBuildPalisade(character) {
   const tier = getSkillTier(character, "Build Palisade");
-  const woodCost = 3; // same for every tier — see design-rationale.md
-  const progressByTier = {
-    primary: 15,
-    secondary: 10,
-    base: 6
+  const manDaysByTier = {
+    primary: 1,
+    secondary: 0.75,
+    base: 0.5
   };
-  const progressGain = progressByTier[tier];
+  const manDaysContributed = manDaysByTier[tier];
 
+  const fort = gameState.fortification;
+  const stage = FORTIFICATION_STAGES[fort.stageIndex];
+
+  // Track is already fully complete — nothing left to build.
+  if (!stage) {
+    return `${character.name} looked over the finished works but found nothing left to add.`;
+  }
+
+  // Wood cost is per-stage (see FORTIFICATION_STAGES) — earthwork
+  // stages (Bailey Grounds, Motte Ditch) cost none, so this check is
+  // a no-op there and never blocks digging for lack of timber.
+  const woodCost = stage.woodCost;
   if (gameState.resources.wood < woodCost) {
-    return `${character.name} had no wood left to work with and made no progress on the palisade.`;
+    return `${character.name} had no wood left to work with and made no progress on the ${stage.name.toLowerCase()}.`;
   }
 
   gameState.resources.wood -= woodCost;
-  gameState.resources.palisadeProgress = Math.min(
-    100,
-    gameState.resources.palisadeProgress + progressGain
-  );
+
+  // Quick placeholder failure roll — see FORTIFICATION_FAILURE_CHANCE.
+  // On a failure, wood is still spent (the attempt was made) but no
+  // man-days are contributed this trip. Not stage-progress-destructive
+  // (doesn't undo prior days) — just a lost day. To be refined in a
+  // design chat (per-stage odds, skill mitigation, whether failure
+  // should ever claw back existing progress).
+  if (Math.random() < FORTIFICATION_FAILURE_CHANCE) {
+    const lines = stage.failureFlavor;
+    return `${character.name} — ${lines[Math.floor(Math.random() * lines.length)]}.`;
+  }
+
+  fort.daysRemaining -= manDaysContributed;
+
+  // Stage complete — advance to the next one and carry over any
+  // leftover man-days contributed this trip (e.g. a Seasoned worker
+  // who finishes a stage with effort to spare starts the next stage
+  // ahead, rather than that labor being wasted).
+  let stageJustCompleted = null;
+  if (fort.daysRemaining <= 0) {
+    stageJustCompleted = stage;
+    const overflow = -fort.daysRemaining; // how much past zero we went
+    fort.stageIndex += 1;
+    const nextStage = FORTIFICATION_STAGES[fort.stageIndex];
+    fort.daysRemaining = nextStage ? nextStage.cost - overflow : 0;
+    if (nextStage && fort.daysRemaining < 0) fort.daysRemaining = 0;
+  }
+
+  if (stageJustCompleted) {
+    const nextStage = FORTIFICATION_STAGES[fort.stageIndex];
+    const nextLine = nextStage
+      ? ` Work can now begin on the ${nextStage.name.toLowerCase()}.`
+      : ` There is nothing left to build — the works are complete.`;
+    return `${character.name} finished the work: ${stageJustCompleted.doneLabel}.${nextLine}`;
+  }
+
+  return buildPalisadeFlavor(character, tier, stage, fort.daysRemaining);
+}
+
+// Flavor text for a day of Build Palisade work that didn't complete a
+// stage. Communicates remaining effort through character voice, never
+// a number or percentage — per the locked "no progress bars, ever"
+// principle. Buckets remaining man-days into rough qualitative bands
+// per stage so text stays true regardless of how big the stage's total
+// cost is.
+function buildPalisadeFlavor(character, tier, stage, daysRemaining) {
+  const fractionLeft = daysRemaining / stage.cost;
+
+  let stageDescriptor;
+  if (fractionLeft > 0.66) {
+    stageDescriptor = `the ${stage.name.toLowerCase()} work has only just begun`;
+  } else if (fractionLeft > 0.33) {
+    stageDescriptor = `the ${stage.name.toLowerCase()} work is coming along, but there's a fair way to go`;
+  } else {
+    stageDescriptor = `the ${stage.name.toLowerCase()} work is nearly finished`;
+  }
+
+  // Earthwork stages (Bailey Grounds, Motte Ditch) are dig/clear labor
+  // — Carpenter's "squares the timbers" phrasing doesn't fit there.
+  // Timber stages (Palisade Stakes onward) keep the original wording.
+  const isEarthwork = stage.skill === "Laborer";
+
+  if (isEarthwork) {
+    if (tier === "primary") {
+      return `${character.name} worked the ground steadily, making efficient use of every hour — ${stageDescriptor}.`;
+    }
+    if (tier === "secondary") {
+      return `${character.name} put in a solid day's digging, if a bit unevenly paced — ${stageDescriptor}.`;
+    }
+    return `${character.name} struggled with the ground, unused to this kind of labor — ${stageDescriptor}.`;
+  }
 
   if (tier === "primary") {
-    return `${character.name} squared the timbers and set them true, working steadily along the line.`;
+    return `${character.name} squared the timbers and set them true, working steadily — ${stageDescriptor}.`;
   }
   if (tier === "secondary") {
-    return `${character.name} made decent progress, though the line isn't as clean as a trained hand would leave it.`;
+    return `${character.name} made decent progress, though the line isn't as clean as a trained hand would leave it — ${stageDescriptor}.`;
   }
-  return `${character.name} wrestled the logs into place, gaps and all — slow, uneven progress.`;
+  return `${character.name} wrestled the logs into place, gaps and all, slow and uneven — ${stageDescriptor}.`;
 }
 
 // Hunt: Hunter (primary) gets more raw food, reliably; a moderate
@@ -1400,18 +1603,41 @@ function baseHitChance(character, watcherPresent, outridersRemaining, originalCo
   return chance * pressureRatio;
 }
 
+// How far along the Fortification track the camp is, as a 0-1 fraction
+// of total man-days paid off out of the full 50. This is an internal
+// number only — never shown to the player (see renderResources) — used
+// purely to drive raid mitigation math, same role the old flat percent
+// played. NOTE: combat/raid mitigation is otherwise out of scope for
+// this session; this function is kept working as-is, just re-pointed
+// at the new staged track instead of the old flat percent.
+function fortificationProgressFraction() {
+  const TOTAL_MAN_DAYS = FORTIFICATION_STAGES.reduce((sum, s) => sum + s.cost, 0); // 50
+  const fort = gameState.fortification;
+
+  let daysPaid = 0;
+  for (let i = 0; i < fort.stageIndex; i++) {
+    daysPaid += FORTIFICATION_STAGES[i].cost;
+  }
+  const currentStage = FORTIFICATION_STAGES[fort.stageIndex];
+  if (currentStage) {
+    daysPaid += currentStage.cost - fort.daysRemaining;
+  } else {
+    daysPaid = TOTAL_MAN_DAYS; // track fully complete
+  }
+
+  return Math.min(1, daysPaid / TOTAL_MAN_DAYS);
+}
+
 // Palisade progress reduces hit chance (up to 50% at full wall).
 function palisadeMitigation(baseChance) {
-  const palisadeProgress = gameState.resources.palisadeProgress; // 0-100
-  const reduction = (palisadeProgress / 100) * 0.5; // up to 50% reduction at full wall
+  const reduction = fortificationProgressFraction() * 0.5; // up to 50% reduction at full wall
   return Math.max(0, baseChance - (baseChance * reduction));
 }
 
 // If the camp is vulnerable (no watcher, low palisade), outriders
 // loot resources on the way out, in priority order (see lootOrder).
 function resolveResourceRisk(watcherPresent) {
-  const palisadeProgress = gameState.resources.palisadeProgress;
-  const campVulnerable = !watcherPresent && palisadeProgress < 30;
+  const campVulnerable = !watcherPresent && fortificationProgressFraction() < 0.30;
 
   if (!campVulnerable) return null;
 
@@ -1551,11 +1777,35 @@ function checkGameOver(entries) {
     return;
   }
 
-  if (gameState.resources.palisadeProgress >= 100) {
+  if (gameState.fortification.stageIndex >= FORTIFICATION_STAGES.length) {
     gameState.gameOver = true;
     gameState.outcome = "victory";
-    entries.push("The palisade stands complete. The camp is secure — the vanguard has held.");
+    entries.push("The works stand complete, watchtower and all. The camp is secure — the vanguard has held.");
   }
+}
+
+// One-line status for the resource summary bar. No numbers, no percent
+// — a qualitative read on which stage is current and roughly how far
+// into it the camp is, same banding logic as buildPalisadeFlavor().
+function fortificationStatusLine() {
+  const fort = gameState.fortification;
+  const stage = FORTIFICATION_STAGES[fort.stageIndex];
+
+  if (!stage) return "complete — the works stand finished";
+
+  const fractionLeft = fort.daysRemaining / stage.cost;
+  let progressWord;
+  if (fractionLeft >= 1) {
+    progressWord = "not yet begun";
+  } else if (fractionLeft > 0.66) {
+    progressWord = "just started";
+  } else if (fractionLeft > 0.33) {
+    progressWord = "underway";
+  } else {
+    progressWord = "nearly finished";
+  }
+
+  return `${stage.name} (${progressWord})`;
 }
 
 // Shows the current resource numbers at the top of the page.
@@ -1581,7 +1831,7 @@ function renderResources() {
     <div>Wood: <span>${r.wood}</span></div>
     <div>Weapons: <span>${r.weapons}</span></div>
     <div>Trees Left: <span>${e.treesRemainingNearby}</span></div>
-    <div>Palisade: <span>${r.palisadeProgress}%</span></div>
+    <div>Fortification: <span>${fortificationStatusLine()}</span></div>
     ${warningLine}
   `;
 }
