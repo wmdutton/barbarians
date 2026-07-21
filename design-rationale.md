@@ -1,4 +1,4 @@
-# Barbarians — Prototype Design Rationale (v0.1.0.0)
+# Barbarians — Prototype Design Rationale (v0.2.0.0)
 
 *Companion to `index.html`, not to the locked design docs. This file
 captures the "why" behind **prototype code decisions** — balance
@@ -61,6 +61,18 @@ Soldier gets a proper weapon of war; everyone else carries whatever their
 trade puts in their hands. `armed: true` on settlers is a placeholder for
 when weapon durability/loss is built per-character.
 
+**Weapon loss (updated 2026-07-21):** weapons no longer have any chance
+of being damaged/lost from use in `resolveFightBack()` — that 20%-per-use
+roll was removed. It was already a contradiction of this section's own
+stated intent ("weapons are durable equipment, not ammunition") and, in
+practice, guaranteed every run's weapon stock eventually hit zero on a
+one-way ratchet with no way back up, which was the single biggest driver
+of difficulty complaints in playtesting. The ONLY way weapons now leave
+camp is theft during a raid where the camp was caught vulnerable (no
+watcher + low fortification) — see `resolveResourceRisk()`. This makes
+"keep weapons" purely a function of "stay watched and fortify," not a
+countdown independent of player action.
+
 ## Task Skill Gating Philosophy
 
 No task is skill-gated — any settler can attempt any task. Skill only affects
@@ -91,14 +103,38 @@ practice, and untended meat can spoil or get dragged off before it makes it
 back to camp. (Future idea: a smokehouse-type building could reduce this
 risk.)
 
+**Updated 2026-07-21 — two playtesting-reported issues fixed together.**
+First: `catch_` (the animal named in the log line) was previously rolled
+independently of `rawYield`, so "a young boar" — which should read as a
+big haul — could show up next to "2 portions," while "a brace of
+pheasant" — which should read as small — could show up next to "6
+portions." Game description and stated yield contradicted each other.
+A new `GAME_BY_YIELD` table now buckets the catch description to match
+the actual roll (hare/squirrels at the low end, up through boar/stag at
+the high end). Second: Hunt's own line no longer states a portion count
+at all — it only describes the catch now ("brought down a young boar").
+The portion number lived on in Cook's same-day output regardless
+("N rations set aside, M from the day's meat"), so a single day's log
+was stating the same underlying number twice, once as "portions" and
+again as "rations" — read as the game repeating itself. The number now
+lives in exactly one place (Cook's line); Hunt is purely descriptive.
+
 **Cook** — Converts raw food into rations, and can also turn forage food into
 rations at a 2:1 ratio as a way to preserve foraged food before it spoils.
 Does both in the same day if both are available — a Cook working the fire
 isn't limited to one pot.
 
-**Perimeter Watch** — No resource output yet; exists purely so the Soldier's
-position is tracked for the scout wave mechanic (see below — this mechanic
-itself is a known-stale stand-in for the locked Watch/Threat design).
+**Perimeter Watch** — Previously had no skill mapping at all (Soldier got
+no bonus for the one task most thematically his). Updated 2026-07-21:
+Soldier is now the primary skill for Perimeter Watch, via a new
+`SECONDARY_PRIMARY_TASK_SKILLS` lookup (kept separate from
+`SKILL_FOR_TASK` since Watch and Scout both now support a primary skill
+that Laborer's "always secondary" rule and the Fortification stage
+override didn't need to anticipate). A Soldier-tier watcher grants a
+bigger fight-back bonus during a raid (+3 vs +1 for a non-Soldier
+watcher, +0 unwatched) — see Scout Wave section below. Watch still exists
+purely so position is tracked for the scout wave mechanic; this remains
+a known-stale stand-in for the locked Watch/Threat design.
 
 **Forage** — Finds food that's safe to eat without cooking (berries, roots,
 greens — not hunted meat). Smaller yield than Hunt but immediately usable. A
@@ -114,6 +150,23 @@ day, that's a combo: together they get a certain reading on both stats — one
 confirms what the other suspects. `trueCount`/`trueDaysOut` are rolled once
 as a forecast the actual wave should closely match, though not necessarily
 exactly (scouts, not oracles).
+
+**Updated 2026-07-21 — Soldier no longer needs the Hunter combo to
+scout.** Originally the strong "guaranteed accurate" read only fired if
+Hunter AND Soldier scouted together, meaning Soldier's day-estimate
+accuracy solo was mediocre (0.45) by design, to push players toward
+pairing him with a Hunter. In practice this never happened: the food
+economy needs the Hunter hunting every day, so no player was ever going
+to give that up to double up on Scout, and the combo mechanic sat
+unused. Soldier is now a fully valid solo scout — day-estimate accuracy
+raised to 0.6, and critically, his miss is capped at "off by one day"
+(`maxSpread = 1`) rather than the wider miss (`maxSpread = 2`) Hunter and
+untrained scouts risk. This directly implements "he'd stake his read
+within a day either way" — even a failed accuracy roll for Soldier stays
+close. The Hunter+Soldier combo still exists and still gives a fully
+guaranteed read on both stats — it's now a bonus for a player who
+happens to have spare hands, not a requirement to get any usable Scout
+result at all.
 
 ## Food Consumption Order
 
@@ -162,6 +215,20 @@ failure. This is explicitly NOT tuned — the founding doc's open flags call
 out per-stage odds and skill mitigation on failure as an unresolved question.
 Don't read the current flat number as a locked decision.
 
+**Updated 2026-07-21 — "work has only just begun" no longer repeats
+every day.** `buildPalisadeFlavor()`'s top band (>66% of a stage's
+man-days remaining) previously fired that exact line on every single
+day of work while the stage sat above that threshold — for a
+multi-day stage like Motte Ditch (6 man-days), that could mean the
+same "only just begun" text 3-4 days running, which read as the game
+not tracking its own progress. Fixed with a new `hasAnnouncedStart`
+flag on `gameState.fortification`, reset to `false` whenever
+`stageIndex` advances. The line now fires once — the first day worked
+in the top band for that stage — then falls through to a plainer
+"work continues" line for the rest of the band, before naturally
+progressing to the existing "coming along" / "nearly finished" bands
+as real progress is made.
+
 **What this does NOT yet cover:** the actual raid/Threat system described in
 the combat design doc. Fortification currently only gates a flat win
 condition (see below) — it doesn't yet shift raid severity distribution,
@@ -196,19 +263,91 @@ Outrider count is kept small and visible to the player — not a hidden
 number, but a fact the log reports, so the player understands the scale of
 the threat. (The locked combat doc keeps Threat itself hidden but does allow
 raider count to be legible via Scouting-derived intel — this prototype
-shortcut of always reporting it outright is looser than that.)
+shortcut of always reporting it outright is looser than that.) As of
+2026-07-21, this count is still cosmetic beyond capping fight-back and
+scaling `pressureRatio` — a wave of 3 and a wave of 5 play out nearly
+identically otherwise. This was flagged directly in playtesting as feeling
+arbitrary. It's an accurate read of the current code, not a misplay, and
+is exactly the gap the locked Combat doc's Threat-driven raider-count
+scaling is meant to close. Not fixed in this pass — noted here so it isn't
+mistaken for already-solved.
 
 **Fighting back:** Weapons on hand set a ceiling on how much damage the
-vanguard can do; a Soldier on watch uses them far more effectively than an
-unarmed or unskilled defense. Weapons are durable equipment, not ammunition —
-they don't get used up by fighting, but each one used has a random chance
-(20%) of being damaged or lost in the melee.
+vanguard can do. **Updated 2026-07-21:** the per-weapon 20%-loss-on-use
+roll has been removed entirely — see "Weapon Assignment" above for why.
+The fight-back bonus is now tiered by who's watching, not a flat "any
+watcher" bonus: **+3 if the watcher is Soldier-primary-tier, +1 for
+anyone else on Watch, +0 unwatched.** This replaces the old flat +2.
+`resolveFightBack()` now takes `(outriderCount, anyWatcher,
+soldierWatching)` — two separate watch-state booleans rather than one —
+sourced from the new `watchPresent()` / `soldierOnWatch()` helpers
+(renamed from the misleadingly-named `hasSoldierOnWatch()`, which never
+actually checked for a Soldier specifically).
 
 **Hit chance:** The watcher is the exposed one — he faces the outriders
-directly. Everyone else is only at risk if both the watch and the wall fail
-to stop the outriders from getting further in. Hit chance scales down
-slightly as more outriders are driven off (fewer attackers left = less
-danger).
+directly. Hit chance scales down slightly as more outriders are driven
+off (fewer attackers left = less danger).
+
+**Updated 2026-07-21 — outridersRemaining no longer floors at 1.**
+Previously `outridersRemaining = Math.max(1, outriderCount - driven)`
+meant that driving off every attacker still left the internal math
+believing 1 was still out there, even though the log line said "drove
+off ${driven} of them" with `driven === outriderCount`. This is the
+root cause of a playtesting-reported bug ("5 outriders approached,
+only 4 driven off, what happened to the 5th?") — the text never
+actually claimed a 5th was unaccounted for, but the internal
+`pressureRatio` was quietly behaving as if one remained. Floor is now
+`Math.max(0, ...)`, a new `allDrivenOff` check gives explicit "raid
+was repelled outright" text when it happens, and `pressureRatio`
+correctly zeroes out at 0 remaining — no divide-by-zero risk since
+`originalCount` (outriderCount) is always ≥3 from `rollOutriderCount()`.
+
+**Updated 2026-07-21 — Watch now protects outdoor workers, not just
+in-camp ones.** Previously, ANY character not on Perimeter Watch was
+treated identically for the "caught in the open" auto-kill check,
+whether they'd spent the day hunting a mile from camp or cooking by the
+fire — the only thing that mattered was whether a watcher existed at
+all. This didn't match the fiction (why would a cook standing at the
+hearth be "caught in the open" the same as a hunter out past the
+treeline?) and it meant staffing Watch felt like it was protecting
+people who were never really at risk while doing nothing legible for
+the people who plausibly were.
+
+A new `OUTDOOR_TASKS` list (Hunt, Forage, Scout, Woodcutting) now
+distinguishes truly exposed characters from in-camp ones:
+- **Caught in the open** (`isOutdoors && !anyWatcher`): the old
+  behavior — auto-kill if the camp has zero weapons, otherwise rolls at
+  full open-ground risk.
+- **Warned** (`isOutdoors && anyWatcher`): a manned Watch — any
+  watcher, doesn't need to be Soldier-tier for this part — is assumed
+  to call outdoor workers back before the raid lands. They are never an
+  automatic kill regardless of weapon count, and roll at the same odds
+  as an in-camp unwatched character (0.05 base, per `baseHitChance`),
+  not full open-ground risk. This is the mechanical answer to a
+  specific playtesting complaint: characters sent out to Hunt/Forage/
+  Woodcutting were functionally unprotected all game even with a
+  watcher posted, which pushed players toward never sending anyone
+  outside camp at all. A `warnedAnyone` flag adds one summary log line
+  when this fires, so the protection is legible, not silent.
+- Perimeter Watch itself is deliberately excluded from `OUTDOOR_TASKS`
+  — the watcher is the one person already braced for the raid, not
+  someone who needs to be called back to safety.
+
+**Updated 2026-07-21 — personal hit chance now also reflects Soldier
+tier, not just the group-level fight-back bonus.** Previously a
+Soldier standing watch faced the exact same personal risk (0.5 base)
+as anyone else on watch — his new fight-back bonus (+3 driven off)
+helped the whole camp, but he was mechanically no safer standing the
+post himself, which read as inconsistent once Watch became a real
+skill lane for him. `baseHitChance()` now takes a `soldierWatching`
+flag and applies it two places: the watcher's own risk drops from 0.5
+to 0.35 when he's Soldier-tier (same exposure, better trained), and a
+warned outdoor worker's risk drops from 0.05 to 0.03 when the watcher
+calling them back is Soldier-tier (his read on approaching danger is
+the same skill underlying his tighter Scout estimate). Neither number
+is precisely tuned — both are small, deliberate nudges in the direction
+"Soldier-on-Watch should feel like a real upgrade everywhere Watch
+matters," not a rebalance pass.
 
 **Palisade mitigation:** Deliberately not framed as "% complete toward a
 finished wall" — even a half-built line of stakes and logs blunts an attack.
@@ -222,6 +361,21 @@ will be rebuilt.)
 palisade), outriders loot on the way out. Priority order: weapons first
 (worth the most, easiest to grab), then rations, then forage food, then raw
 food. Wood is never looted — a raiding party isn't hauling lumber.
+
+**Updated 2026-07-21 — always reports an outcome.** `resolveResourceRisk()`
+previously returned `null` (no log line at all) both when the camp wasn't
+"vulnerable" and when it was vulnerable but had nothing left to steal.
+This meant the player could never distinguish "nothing was taken" from
+"I just didn't notice the line" — flagged directly in playtesting as
+confusing, especially now that weapons can ONLY be lost this way (see
+"Fighting back" above). The function now always returns a string: an
+explicit "stores went untouched" line when not vulnerable, an explicit
+"nothing left worth taking" line when vulnerable but empty-handed, and
+the existing itemized-loss line otherwise. `resolveScoutWave()` also now
+places this line in the same position every raid (immediately after
+casualty resolution, before the survivor count), rather than wherever it
+happened to fall — findability was part of the complaint, not just
+existence.
 
 **What the combat design doc replaces this with:** a hidden, accumulating
 Threat value with threshold-based telegraphing (quiet → ambient signal →
