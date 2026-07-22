@@ -1,6 +1,6 @@
 <!--
   Barbarians — Prototype
-  Version: 0.2.0.0
+  Version: 0.2.0.1
   Author: Mason Dutton
   Last updated: 2026-07-21
 
@@ -385,7 +385,7 @@
 <body>
 
 <h1>Barbarians</h1>
-<div id="versionTag">v0.2.0.0 — prototype, unreleased</div>
+<div id="versionTag">v0.2.0.1 — prototype, unreleased</div>
 
 <div id="selectionScreen">
   <p id="selectionInstructions"></p>
@@ -430,7 +430,7 @@ const gameState = {
 
   resources: {
     rations: 0,     // set by whichever Cooks the player picks — see applyStartingSupplies()
-    rawFood: 0,     // hunted meat — needs a Cook before it's safe/wise to eat
+    rawFood: 0,     // hunted meat — needs a Master Cook before it's safe/wise to eat
     forageFood: 0,  // foraged food — edible directly, no cooking needed, but spoils fast
     forageFoodAge: 0, // days since the current forage food stock was gathered — spoils at 2
     wood: 0,        // set by whichever Carpenters the player picks
@@ -505,17 +505,17 @@ const BACKSTORY_POOL = {
     "trained under a York guild master, still carries his late father's chisel.",
     "left an apprenticeship unfinished when the roads north grew too dangerous to travel."
   ],
-  Hunter: [
+  Veneur: [
     "grew up poaching the king's deer and never once got caught.",
     "spent more nights sleeping under trees than under a roof, and prefers it that way.",
     "learned to track from a father who was better with animals than with people."
   ],
-  Cook: [
+  "Master Cook": [
     "ran a tavern kitchen for a decade before the harvest failures closed it.",
     "was taught to stretch a meal for twelve on rations meant for six.",
     "still has burn scars from a fire that took a family's bakery, not this one."
   ],
-  Soldier: [
+  "Man-at-Arms": [
     "survived a border skirmish that killed most of his unit.",
     "was a household guard for a lord who no longer has a household.",
     "has killed before and does not talk about it unless asked twice."
@@ -534,7 +534,7 @@ const BACKSTORY_POOL = {
 
 // Active vanguard skill pool. Farmer exists in BACKSTORY_POOL but is
 // intentionally excluded here — see design-rationale.md.
-const ALL_SKILLS = ["Carpenter", "Hunter", "Cook", "Soldier", "Laborer"];
+const ALL_SKILLS = ["Carpenter", "Veneur", "Master Cook", "Man-at-Arms", "Laborer"];
 
 // The tasks a settler can be assigned to for the day.
 // No task is skill-gated — any settler can attempt any task.
@@ -652,7 +652,7 @@ function pickUniqueNames(count) {
 
 // Skills are rolled independently per settler — overlaps
 // and gaps are allowed on purpose. A settlement with two
-// Cooks and no Soldier is a valid (and interesting) outcome.
+// Master Cooks and no Man-at-Arms is a valid (and interesting) outcome.
 function rollSkill() {
   const index = Math.floor(Math.random() * ALL_SKILLS.length);
   return ALL_SKILLS[index];
@@ -661,7 +661,7 @@ function rollSkill() {
 // Rolls a Secondary skill, guaranteed different from the given
 // Primary skill. Every character EXCEPT Laborer has exactly one
 // Primary and one Secondary skill, fully random pairing — they
-// don't need to relate narratively (e.g. a Cook can roll Soldier
+// don't need to relate narratively (e.g. a Master Cook can roll Man-at-Arms
 // as Secondary).
 //
 // Laborer is excluded from the pool of possible Secondary rolls
@@ -721,10 +721,10 @@ function rollStartingSupplies(skill) {
   }
 
   const supplyRanges = {
-    Cook: { rations: [3, 6] },
-    Hunter: { rawFood: [2, 5] },
+    "Master Cook": { rations: [3, 6] },
+    Veneur: { rawFood: [2, 5] },
     Carpenter: { wood: [2, 5] },
-    Soldier: { weapons: [1, 3] }
+    "Man-at-Arms": { weapons: [1, 3] }
   };
 
   const ranges = supplyRanges[skill] || {};
@@ -1007,11 +1007,11 @@ function updateStartDayAvailability() {
 const SKILL_FOR_TASK = {
   "Woodcutting": "Carpenter",
   "Build Palisade": "Carpenter",
-  "Hunt": "Hunter",
-  "Cook": "Cook",
-  "Forage": "Hunter",   // tracking/woodcraft covers foraging too
-  "Scout": "Hunter"     // same skillset — a ranger reads the land
-  // Perimeter Watch and Scout both also treat Soldier as primary —
+  "Hunt": "Veneur",
+  "Cook": "Master Cook",
+  "Forage": "Veneur",   // tracking/woodcraft covers foraging too
+  "Scout": "Veneur"     // same skillset — a ranger reads the land
+  // Perimeter Watch and Scout both also treat Man-at-Arms as primary —
   // see SECONDARY_PRIMARY_TASK_SKILLS below. Two valid primaries
   // for the same task is new as of this pass; getSkillTier checks
   // both rather than this object supporting only one value per key.
@@ -1020,11 +1020,11 @@ const SKILL_FOR_TASK = {
 // Tasks where a SECOND skill also counts as "primary", alongside
 // whatever SKILL_FOR_TASK says (or, for Perimeter Watch, as the
 // only primary skill — Watch has no SKILL_FOR_TASK entry at all).
-// Soldier reads terrain and threat the way a Hunter reads game —
+// Man-at-Arms reads terrain and threat the way a Veneur reads game —
 // different training, same practical result on these two tasks.
 const SECONDARY_PRIMARY_TASK_SKILLS = {
-  "Perimeter Watch": "Soldier",
-  "Scout": "Soldier"
+  "Perimeter Watch": "Man-at-Arms",
+  "Scout": "Man-at-Arms"
 };
 
 // ---------------------------------------------
@@ -1276,7 +1276,7 @@ function buildPalisadeFlavor(character, tier, stage, fort) {
   return `${character.name} wrestled the logs into place, gaps and all, slow and uneven — ${stageDescriptor}.`;
 }
 
-// Hunt: Hunter (primary) gets more raw food, reliably; a moderate
+// Hunt: Veneur (primary) gets more raw food, reliably; a moderate
 // tier sits between; base tier gets little. See design-rationale.md.
 //
 // Updated 2026-07-21: game description now scales WITH the actual
@@ -1289,12 +1289,12 @@ function buildPalisadeFlavor(character, tier, stage, fort) {
 // match the actual number rolled.
 //
 // Also drops the redundant portion-count restatement — Hunt no
-// longer says "N portions" in its own line, since Cook's output the
-// same day already states the ration count derived from that raw
+// longer says "N portions" in its own line, since Master Cook's output
+// the same day already states the ration count derived from that raw
 // food (see resolveCook). Saying the number twice in one day's log,
 // once as "portions" and again as "rations," read as the game
 // repeating itself rather than describing two different things.
-// Hunt now just describes the catch; Cook is where the number lives.
+// Hunt now just describes the catch; Master Cook is where the number lives.
 const GAME_BY_YIELD = [
   { max: 1, options: ["a hare", "a handful of squirrels"] },
   { max: 3, options: ["a brace of pheasant", "a couple of rabbits"] },
@@ -1338,7 +1338,7 @@ function resolveHunt(character) {
   return flavor[qualityTier] || `${character.name} brought down ${catch_}.`;
 }
 
-// Cook: converts raw food into rations; also converts forage food
+// Cook task: Master Cook converts raw food into rations; also converts forage food
 // into rations at 2:1. Does both in the same day if available.
 // Three tiers of conversion efficiency. See design-rationale.md.
 function resolveCook(character) {
@@ -1389,9 +1389,9 @@ function resolveCook(character) {
 
 // Perimeter Watch: no resource output — tracks position for
 // the scout wave mechanic (see resolveScoutWave) and now also
-// grants a real skill tier (Soldier is primary here — see
+// grants a real skill tier (Man-at-Arms is primary here — see
 // SECONDARY_PRIMARY_TASK_SKILLS). Tier doesn't change day-to-day
-// text much since nothing happens without a raid, but a Soldier
+// text much since nothing happens without a raid, but a Man-at-Arms
 // watcher reads as more competent even on a quiet day.
 function resolvePerimeterWatch(character) {
   character.position = "perimeter";
@@ -1442,13 +1442,13 @@ function resolveForage(character) {
   return flavor[qualityTier];
 }
 
-// Scout: Hunter and Soldier each estimate different stats (days vs.
+// Scout: Veneur and Man-at-Arms each estimate different stats (days vs.
 // count) with different accuracy; both present on the same day is a
 // "combo" that guarantees an accurate reading. Runs once per day
 // (not per-character) — see resolveScoutForEnemiesForDay, called
 // from runDay(). Full reasoning in design-rationale.md.
 //
-// NOTE: Scout's Hunter/Soldier accuracy split is its own existing
+// NOTE: Scout's Veneur/Man-at-Arms accuracy split is its own existing
 // mechanic and is intentionally NOT run through getSkillTier()/the
 // new Primary/Secondary tiers in this pass — see chat notes. It
 // still only checks character.skill directly (Primary), same as
@@ -1466,21 +1466,21 @@ function rollEstimate(trueValue, accuracyChance, maxSpread) {
   return { value: wrongValue, accurate: false };
 }
 
-// Resolves Scout for the whole day at once. Soldier and Hunter are
+// Resolves Scout for the whole day at once. Man-at-Arms and Veneur are
 // both valid solo scouts now (see SECONDARY_PRIMARY_TASK_SKILLS) —
 // neither requires the other. Sending both together is a bonus
 // (guaranteed accurate read), not a requirement to get any read at
 // all. This matters for a food-scarce game: a player who always
-// needs their Hunter hunting shouldn't be locked out of a working
-// Scout — Soldier alone covers it.
+// needs their Veneur hunting shouldn't be locked out of a working
+// Scout — Man-at-Arms alone covers it.
 function resolveScoutForEnemiesForDay(scoutingCharacters) {
   if (scoutingCharacters.length === 0) return [];
 
   const daysUntilWave = gameState.nextWaveDay - gameState.day;
   const forecastCount = 3 + Math.floor(Math.random() * 3); // matches rollOutriderCount's range
 
-  const hasHunter = scoutingCharacters.some(c => c.skill === "Hunter");
-  const hasSoldier = scoutingCharacters.some(c => c.skill === "Soldier");
+  const hasHunter = scoutingCharacters.some(c => c.skill === "Veneur");
+  const hasSoldier = scoutingCharacters.some(c => c.skill === "Man-at-Arms");
   const comboActive = hasHunter && hasSoldier;
 
   const entries = [];
@@ -1490,7 +1490,7 @@ function resolveScoutForEnemiesForDay(scoutingCharacters) {
       estimatedDays: daysUntilWave, daysAccurate: true,
       estimatedCount: forecastCount, countAccurate: true
     };
-    entries.push(`A raiding party is out there, and this time there's no doubt about it — between tracking and trained instinct, the Hunter and Soldier together confirmed ${forecastCount} outriders, ${daysUntilWave} day(s) out. Sending both on the same scout was a good call.`);
+    entries.push(`A raiding party is out there, and this time there's no doubt about it — between tracking and trained instinct, the Veneur and Man-at-Arms together confirmed ${forecastCount} outriders, ${daysUntilWave} day(s) out. Sending both on the same scout was a good call.`);
     return entries;
   }
 
@@ -1498,15 +1498,15 @@ function resolveScoutForEnemiesForDay(scoutingCharacters) {
   // Flavor text describes what THIS specific roll actually landed on,
   // not a fixed hedge — so the log never contradicts the resource bar.
   scoutingCharacters.forEach(character => {
-    const isHunter = character.skill === "Hunter";
-    const isSoldier = character.skill === "Soldier";
+    const isHunter = character.skill === "Veneur";
+    const isSoldier = character.skill === "Man-at-Arms";
 
     const daysAccuracy = isHunter ? 0.8 : (isSoldier ? 0.6 : 0.3);
     const countAccuracy = isSoldier ? 0.8 : (isHunter ? 0.45 : 0.3);
-    // Soldier's day-estimate miss is capped at "off by one" (maxSpread
+    // Man-at-Arms's day-estimate miss is capped at "off by one" (maxSpread
     // 1) rather than the wider miss everyone else risks (maxSpread 2)
     // — a soldier reading enemy movement judges timing closely even
-    // when he's not dead-on. Hunter/Laborer keep the wider miss.
+    // when he's not dead-on. Veneur/Laborer keep the wider miss.
     const daysMaxSpread = isSoldier ? 1 : 2;
 
     const daysEstimate = rollEstimate(daysUntilWave, daysAccuracy, daysMaxSpread);
@@ -1544,7 +1544,7 @@ function resolveScoutForEnemiesForDay(scoutingCharacters) {
 // Routes a character to the correct resolver based on their task.
 // Note: "Scout" is deliberately NOT routed through here —
 // it's resolved once per day for all scouts at once, from runDay(),
-// since the Hunter+Soldier combo needs to see the full day's assignments.
+// since the Veneur+Man-at-Arms combo needs to see the full day's assignments.
 function resolveCharacterTask(character) {
   switch (character.currentTask) {
     case "Build Palisade": return resolveBuildPalisade(character);
@@ -1640,10 +1640,10 @@ function hungerStage(character) {
 
 // Returns true if ANY living character was assigned Perimeter Watch
 // today, regardless of skill. Despite the old name, this was never
-// Soldier-specific — kept as watchPresent() for clarity now that
-// Soldier gets a real bonus ON TOP of this (see soldierOnWatch()
+// Man-at-Arms-specific — kept as watchPresent() for clarity now that
+// Man-at-Arms gets a real bonus ON TOP of this (see soldierOnWatch()
 // below). Watch-by-anyone still grants the baseline protections
-// (outdoor-worker warning, small fight-back bonus); Soldier-on-Watch
+// (outdoor-worker warning, small fight-back bonus); Man-at-Arms-on-Watch
 // grants the bigger fight-back number specifically.
 function watchPresent() {
   return gameState.characters.some(
@@ -1651,7 +1651,7 @@ function watchPresent() {
   );
 }
 
-// Returns true only if the watcher is Soldier-primary-tier —
+// Returns true only if the watcher is Man-at-Arms-primary-tier —
 // distinct from watchPresent() above.
 function soldierOnWatch() {
   return gameState.characters.some(
@@ -1667,7 +1667,7 @@ function rollOutriderCount() {
 
 // Returns how many outriders the vanguard drove off. Weapons cap
 // the damage dealt; whoever's on Watch adds a bonus, bigger if
-// that watcher is Soldier-primary-tier. Weapons no longer have any
+// that watcher is Man-at-Arms-primary-tier. Weapons no longer have any
 // chance of being lost from use — they're durable equipment (matches
 // the stated intent in design-rationale.md that was previously
 // contradicted by a 20%-per-use loss roll). The ONLY way weapons
@@ -1679,7 +1679,7 @@ function resolveFightBack(outriderCount, anyWatcher, soldierWatching) {
     return 0; // nothing to fight back with — the camp can only endure
   }
 
-  // Soldier-on-Watch: +3. Anyone else on Watch: +1. No watcher: +0.
+  // Man-at-Arms-on-Watch: +3. Anyone else on Watch: +1. No watcher: +0.
   const watchBonus = soldierWatching ? 3 : (anyWatcher ? 1 : 0);
   const weaponsAvailable = Math.min(weapons, outriderCount);
   const driven = Math.min(outriderCount, weaponsAvailable + watchBonus);
@@ -1691,17 +1691,17 @@ function resolveFightBack(outriderCount, anyWatcher, soldierWatching) {
 // (see palisadeMitigation). Highest for the watcher; scales down
 // as more outriders are driven off.
 //
-// Updated 2026-07-21: now takes soldierWatching, so a Soldier's
+// Updated 2026-07-21: now takes soldierWatching, so a Man-at-Arms's
 // mechanical edge shows up in personal risk too, not just in
 // resolveFightBack's group-level driven-off count. Two spots use it:
-//   - The watcher's own risk: a Soldier standing watch is still the
+//   - The watcher's own risk: a Man-at-Arms standing watch is still the
 //     one facing outriders directly (same exposure), but his training
 //     means he's meaningfully less likely to actually be hit than an
 //     untrained watcher standing the same post.
-//   - A warned outdoor worker's risk: called back by a Soldier's
+//   - A warned outdoor worker's risk: called back by a Man-at-Arms's
 //     watch specifically is a sharper warning (he reads the land/
 //     movement better — same skill that makes his Scout read tighter)
-//     than being called back by a non-Soldier watcher.
+//     than being called back by a non-Man-at-Arms watcher.
 function baseHitChance(character, watcherPresent, outridersRemaining, originalCount, soldierWatching) {
   const onWatch = character.currentTask === "Perimeter Watch";
   const pressureRatio = outridersRemaining / originalCount; // fewer attackers left = less danger
@@ -1793,7 +1793,7 @@ function resolveResourceRisk(anyWatcher) {
 }
 
 // Tasks that take a character outside the camp's immediate footprint.
-// A manned Watch (anyone, not just Soldier) warns these characters to
+// A manned Watch (anyone, not just Man-at-Arms) warns these characters to
 // fall back before a raid lands — they don't get the "caught in the
 // open with nothing to defend himself" auto-kill, and roll at the
 // unwatched-but-in-camp hit chance instead of full open-ground risk.
