@@ -1,8 +1,8 @@
 <!--
   Barbarians — Prototype
-  Version: 0.3.0.0
+  Version: 0.3.0.1
   Author: Mason Dutton
-  Last updated: 2026-07-23
+  Last updated: 2026-07-24
 
   Full changelog is kept separately (not in this file); see
   barbarians-changelog.md, attached to the project.
@@ -385,7 +385,7 @@
 <body>
 
 <h1>Barbarians</h1>
-<div id="versionTag">v0.3.0.0 — prototype, unreleased</div>
+<div id="versionTag">v0.3.0.1 — prototype, unreleased</div>
 
 <div id="selectionScreen">
   <p id="selectionInstructions"></p>
@@ -748,13 +748,19 @@ function generateSettlers() {
 // ---------------------------------------------
 // VANGUARD SELECTION
 // Before the day loop starts, the player is shown a pool of
-// candidate men and picks exactly 5 to form the vanguard.
+// candidate men and picks exactly VANGUARD_SIZE to form the vanguard
+// (currently equal to the live role count in ALL_SKILLS).
 // A limited number of rerolls lets the player regenerate
 // whichever candidates they haven't already picked.
 // ---------------------------------------------
 
 const CANDIDATE_POOL_SIZE = 8;
 const MAX_REROLLS = 3;
+// Vanguard size is read from the live role count, not hardcoded —
+// if ALL_SKILLS grows or shrinks (e.g. Outrider/Woodward added later),
+// selection requirements update automatically instead of silently
+// staying stale at a stale number.
+const VANGUARD_SIZE = ALL_SKILLS.length;
 
 let candidatePool = [];   // the current list of choosable men
 let selectedIds = [];     // ids of candidates the player has picked
@@ -803,22 +809,22 @@ function renderCandidatePool() {
   });
 
   document.getElementById("selectionInstructions").textContent =
-    `Choose 5 men for the vanguard. Selected: ${selectedIds.length} / 5.`;
+    `Choose ${VANGUARD_SIZE} men for the vanguard. Selected: ${selectedIds.length} / ${VANGUARD_SIZE}.`;
 
   document.getElementById("rerollCount").textContent =
     `Rerolls remaining: ${rerollsRemaining}`;
 
   document.getElementById("rerollBtn").disabled = rerollsRemaining === 0;
-  document.getElementById("confirmVanguardBtn").disabled = selectedIds.length !== 5;
+  document.getElementById("confirmVanguardBtn").disabled = selectedIds.length !== VANGUARD_SIZE;
 }
 
 // Adds or removes a candidate from the selection when clicked.
-// Selection is capped at 5 — clicking a 6th candidate does nothing
-// until the player deselects one first.
+// Selection is capped at VANGUARD_SIZE — clicking past the cap does
+// nothing until the player deselects one first.
 function toggleCandidateSelection(candidateId) {
   if (selectedIds.includes(candidateId)) {
     selectedIds = selectedIds.filter(id => id !== candidateId);
-  } else if (selectedIds.length < 5) {
+  } else if (selectedIds.length < VANGUARD_SIZE) {
     selectedIds.push(candidateId);
   }
   renderCandidatePool();
@@ -849,7 +855,7 @@ function generateFreshCandidates(count, excludeNames) {
   return shuffled.slice(0, count).map(createSettler);
 }
 
-// Called when the player confirms their 5 chosen men.
+// Called when the player confirms their chosen vanguard (VANGUARD_SIZE men).
 // Moves the selected candidates into gameState, adds up what they
 // brought with them into the starting resource pool, and starts the game.
 function confirmVanguard() {
