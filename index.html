@@ -1,8 +1,8 @@
 <!--
   Barbarians — Prototype
-  Version: 0.2.0.1
+  Version: 0.3.0.0
   Author: Mason Dutton
-  Last updated: 2026-07-21
+  Last updated: 2026-07-23
 
   Full changelog is kept separately (not in this file); see
   barbarians-changelog.md, attached to the project.
@@ -385,7 +385,7 @@
 <body>
 
 <h1>Barbarians</h1>
-<div id="versionTag">v0.2.0.1 — prototype, unreleased</div>
+<div id="versionTag">v0.3.0.0 — prototype, unreleased</div>
 
 <div id="selectionScreen">
   <p id="selectionInstructions"></p>
@@ -520,10 +520,20 @@ const BACKSTORY_POOL = {
     "was a household guard for a lord who no longer has a household.",
     "has killed before and does not talk about it unless asked twice."
   ],
-  Laborer: [
-    "has done a bit of everything and mastered none of it, but never complains about the work.",
-    "worked docks, fields, and quarries before answering the call for this vanguard.",
-    "is stronger backed than skilled, and knows it."
+  Gatherer: [
+    "learned which roots won't kill you from a grandmother who buried three husbands and outlived them all.",
+    "spent a hungry childhood combing hedgerows and never lost the habit.",
+    "can name every plant in a treeline by moonlight alone."
+  ],
+  Hewer: [
+    "has swung an axe since he was tall enough to lift one.",
+    "worked a charcoal camp deep in the Weald before the lord's men came through.",
+    "reads a tree's grain the way a priest reads scripture."
+  ],
+  Fossier: [
+    "dug drainage ditches for three different manors and never once complained about the mud.",
+    "has calluses a Carpenter would envy and no patience for fine work.",
+    "believes there is no ground that can't be moved with enough time and a strong back."
   ],
   Farmer: [
     "worked land that belonged to three different lords in one lifetime.",
@@ -532,9 +542,14 @@ const BACKSTORY_POOL = {
   ]
 };
 
-// Active vanguard skill pool. Farmer exists in BACKSTORY_POOL but is
-// intentionally excluded here — see design-rationale.md.
-const ALL_SKILLS = ["Carpenter", "Veneur", "Master Cook", "Man-at-Arms", "Laborer"];
+// Active vanguard skill pool — 7 live roles per the locked
+// Skill-Weight Model (barbarians-design-doc-characters-20260721.md).
+// Outrider and Woodward are tabled (blocked on Threat and the
+// Founding Sequence respectively — see design doc). Farmer exists
+// in BACKSTORY_POOL but is intentionally excluded here.
+// Laborer is retired outright, not renamed — see design-rationale.md
+// (Laborer section) for why the generalist-fallback role was cut.
+const ALL_SKILLS = ["Carpenter", "Veneur", "Master Cook", "Man-at-Arms", "Gatherer", "Hewer", "Fossier"];
 
 // The tasks a settler can be assigned to for the day.
 // No task is skill-gated — any settler can attempt any task.
@@ -570,9 +585,9 @@ function taskDisplayLabel(task) {
 // `doneLabel` is the flavor phrase used once that stage is behind you.
 // `skill` is which skill counts as Seasoned/"primary" for THIS stage
 // specifically — earthwork stages (Bailey Grounds, Motte Ditch) favor
-// Laborer's generic hard-labor competence over Carpenter's specialized
-// woodworking; timber stages favor Carpenter. TBD: naming may move to
-// more period-accurate terms later — noted, not blocking this build.
+// Fossier; timber stages favor Carpenter. Earthwork is a no-skill task
+// per the locked weight model (see resolveBuildPalisade) — Fossier's
+// bonus is a delay-avoidance perk, not a yield bonus like Carpenter's.
 // `woodCost` is the wood spent per day of work on this stage. Earthwork
 // stages need none — you don't need timber to clear ground or dig a
 // ditch. Wood only enters the track once actual construction starts,
@@ -583,7 +598,7 @@ function taskDisplayLabel(task) {
 // a design chat; do not treat these numbers/lines as locked.
 const FORTIFICATION_STAGES = [
   {
-    name: "Bailey Grounds", cost: 3, skill: "Laborer", woodCost: 0,
+    name: "Bailey Grounds", cost: 3, skill: "Fossier", woodCost: 0,
     doneLabel: "the bailey grounds are cleared",
     failureFlavor: [
       "the ground turned out stonier than it looked — the clearing work was lost to it",
@@ -591,7 +606,7 @@ const FORTIFICATION_STAGES = [
     ]
   },
   {
-    name: "Motte Ditch", cost: 6, skill: "Laborer", woodCost: 0,
+    name: "Motte Ditch", cost: 6, skill: "Fossier", woodCost: 0,
     doneLabel: "the motte ditch is dug",
     failureFlavor: [
       "the ditch wall collapsed back in on itself before it could be shored up",
@@ -659,22 +674,12 @@ function rollSkill() {
 }
 
 // Rolls a Secondary skill, guaranteed different from the given
-// Primary skill. Every character EXCEPT Laborer has exactly one
-// Primary and one Secondary skill, fully random pairing — they
-// don't need to relate narratively (e.g. a Master Cook can roll Man-at-Arms
-// as Secondary).
-//
-// Laborer is excluded from the pool of possible Secondary rolls
-// entirely (not just zeroed out at resolution time) — Laborer is
-// already "moderate at everything" as a Primary, so letting it
-// also be handed out as a Secondary would be a dead roll for
-// whoever received it (getSkillTier() grants no bonus for a
-// Laborer secondary) and would silently waste that character's
-// secondary slot. See design-rationale.md (Laborer section).
-const SECONDARY_SKILL_POOL = ALL_SKILLS.filter(skill => skill !== "Laborer");
-
+// Primary skill. Every character has exactly one Primary and one
+// Secondary skill, fully random pairing — they don't need to relate
+// narratively (e.g. a Master Cook can roll Man-at-Arms as Secondary).
+// With Laborer retired, no role needs special-casing out of this pool.
 function rollSecondarySkill(primarySkill) {
-  const options = SECONDARY_SKILL_POOL.filter(skill => skill !== primarySkill);
+  const options = ALL_SKILLS.filter(skill => skill !== primarySkill);
   const index = Math.floor(Math.random() * options.length);
   return options[index];
 }
@@ -688,43 +693,17 @@ function pickBackstory(skill) {
 
 // Rolls the starting supplies a candidate brings with them, tied to
 // their skill. See design-rationale.md for why this is per-candidate.
-//
-// Laborer is a special case: instead of one modest fixed resource,
-// a Laborer rolls TWO of the four resource types at random, each at
-// a moderate range. This is what makes Laborer's supply line
-// distinct from every other Laborer — two Laborers can bring very
-// different combinations, whereas "always rations" would make every
-// Laborer interchangeable. See design-rationale.md (Laborer section).
-const LABORER_RESOURCE_POOL = ["rations", "rawFood", "wood", "weapons"];
-const LABORER_SUPPLY_RANGES = {
-  rations: [2, 4],
-  rawFood: [1, 3],
-  wood: [1, 3],
-  weapons: [1, 2]
-};
-
-function rollLaborerSupplies() {
-  const shuffled = [...LABORER_RESOURCE_POOL].sort(() => Math.random() - 0.5);
-  const chosenResources = shuffled.slice(0, 2);
-
-  const supplies = {};
-  chosenResources.forEach(resource => {
-    const [min, max] = LABORER_SUPPLY_RANGES[resource];
-    supplies[resource] = min + Math.floor(Math.random() * (max - min + 1));
-  });
-  return supplies;
-}
-
+// Gatherer/Hewer/Fossier get modest ranges of their own now that
+// Laborer (the old two-resource generalist) is retired.
 function rollStartingSupplies(skill) {
-  if (skill === "Laborer") {
-    return rollLaborerSupplies();
-  }
-
   const supplyRanges = {
     "Master Cook": { rations: [3, 6] },
     Veneur: { rawFood: [2, 5] },
     Carpenter: { wood: [2, 5] },
-    "Man-at-Arms": { weapons: [1, 3] }
+    "Man-at-Arms": { weapons: [1, 3] },
+    Gatherer: { forageFood: [2, 4] },
+    Hewer: { wood: [1, 3] },
+    Fossier: { rations: [1, 3] }
   };
 
   const ranges = supplyRanges[skill] || {};
@@ -737,19 +716,17 @@ function rollStartingSupplies(skill) {
 }
 
 // Builds one settler object. Every settler has a Primary skill
-// (labeled on the card, drives the best yield tier). Every settler
-// EXCEPT Laborer also has a Secondary skill (shown smaller/unlabeled
-// underneath, drives a moderate yield tier) — Laborer opts out of
-// the Primary/Secondary model entirely since it's already moderate
-// at everything by default. See design-rationale.md.
+// (labeled on the card, drives the best yield tier) and a Secondary
+// skill (shown smaller/unlabeled underneath, drives a moderate tier
+// on whichever task it matches). See design-rationale.md.
 function createSettler(name) {
   const skill = rollSkill();
-  const secondarySkill = skill === "Laborer" ? null : rollSecondarySkill(skill);
+  const secondarySkill = rollSecondarySkill(skill);
   return {
     id: name.toLowerCase(),
     name: name,
     skill: skill,                      // Primary skill
-    secondarySkill: secondarySkill,    // Secondary skill, or null for Laborer
+    secondarySkill: secondarySkill,    // Secondary skill
     backstory: pickBackstory(skill),
     alive: true,
     currentTask: null,  // assigned once the day simulation exists
@@ -797,6 +774,7 @@ function formatSupplies(supplies) {
   const labels = {
     rations: "rations",
     rawFood: "raw food",
+    forageFood: "forage food",
     wood: "wood",
     weapons: "weapons"
   };
@@ -812,11 +790,7 @@ function renderCandidatePool() {
     const isSelected = selectedIds.includes(candidate.id);
     const card = document.createElement("div");
     card.className = isSelected ? "candidate selected" : "candidate";
-    // Secondary skill line is omitted entirely for Laborer (no
-    // secondary skill at all — see createSettler/rollSecondarySkill).
-    const secondaryLine = candidate.secondarySkill
-      ? `<div class="secondary-skill">${candidate.secondarySkill}</div>`
-      : "";
+    const secondaryLine = `<div class="secondary-skill">${candidate.secondarySkill}</div>`;
     card.innerHTML = `
       <div class="name">${candidate.name}</div>
       <div class="skill">${candidate.skill}</div>
@@ -922,10 +896,7 @@ function renderRoster() {
     if (character.alive) {
       const stage = hungerStage(character);
       const hungerTag = stage ? `<div class="hunger-tag ${stage}">${stage}</div>` : "";
-      // Secondary skill line is omitted entirely for Laborer.
-      const secondaryLine = character.secondarySkill
-        ? `<div class="secondary-skill">${character.secondarySkill}</div>`
-        : "";
+      const secondaryLine = `<div class="secondary-skill">${character.secondarySkill}</div>`;
 
       card.innerHTML = `
         <div class="name">${character.name}</div>
@@ -1004,17 +975,18 @@ function updateStartDayAvailability() {
 // Maps each skill-gated task to the skill that's considered a
 // match for it. Used by getSkillTier() to figure out whether a
 // character's Primary or Secondary skill applies to a given task.
+// Per the locked Role→task table (barbarians-design-doc-characters-
+// 20260721.md): Woodcutting→Hewer, Forage→Gatherer, Hunt/Scout stay
+// with Veneur (Scout's Veneur+Man-at-Arms combo is untouched by 1b —
+// Outrider is tabled, blocked on Threat). Build Palisade's skill is
+// resolved per-stage instead (see FORTIFICATION_STAGES), so it has
+// no flat entry here.
 const SKILL_FOR_TASK = {
-  "Woodcutting": "Carpenter",
-  "Build Palisade": "Carpenter",
+  "Woodcutting": "Hewer",
   "Hunt": "Veneur",
   "Cook": "Master Cook",
-  "Forage": "Veneur",   // tracking/woodcraft covers foraging too
-  "Scout": "Veneur"     // same skillset — a ranger reads the land
-  // Perimeter Watch and Scout both also treat Man-at-Arms as primary —
-  // see SECONDARY_PRIMARY_TASK_SKILLS below. Two valid primaries
-  // for the same task is new as of this pass; getSkillTier checks
-  // both rather than this object supporting only one value per key.
+  "Forage": "Gatherer",
+  "Scout": "Veneur"     // unchanged — Outrider is tabled, see design doc
 };
 
 // Tasks where a SECOND skill also counts as "primary", alongside
@@ -1030,27 +1002,30 @@ const SECONDARY_PRIMARY_TASK_SKILLS = {
 // ---------------------------------------------
 // SKILL TIER RESOLUTION
 //
-// Every skill-gated task now has three possible tiers instead of
-// two: "primary" (best), "secondary" (moderate), and "base" (no
-// match). Laborer is a deliberate special case: it grants no
-// task-specific bonus anywhere, but a Laborer-primary character
-// always gets AT LEAST the "secondary" (moderate) tier on every
-// task, representing reliable-but-unspecialized competence. See
-// design-rationale.md for the full reasoning.
+// Every skill-gated task has three possible tiers: "primary" (best),
+// "secondary" (moderate — this character's Secondary skill happens
+// to match), and "base" (no match at all — the character has no
+// training relevant to this task).
+//
+// As of 1b, WHAT each tier actually means mechanically is no longer
+// flat across every task — it depends on the task's skill weight
+// (see barbarians-design-doc-characters-20260721.md, Task Skill-
+// Weight Model). getSkillTier() only answers "which of the three
+// tiers applies" — each resolver (resolveHunt, resolveCook, etc.)
+// decides how big a gap that tier implies for its own task. This is
+// the load-bearing change in 1b: previously every task read the same
+// tier into the same shape of numeric gap; now Hunt's "base" tier
+// and Cook's "base" tier can (and do) mean very different things.
 //
 // Resolution order (first match wins):
-//   1. Primary skill is Laborer -> "secondary" tier, always.
-//   2. Primary skill matches this task -> "primary" tier.
-//   3. Secondary skill matches this task -> "secondary" tier.
-//      (Laborer can no longer be rolled as a Secondary at all —
-//      see rollSecondarySkill/SECONDARY_SKILL_POOL — so this
-//      check no longer needs to guard against it.)
-//   4. No match -> "base" tier.
+//   1. Primary skill matches this task -> "primary" tier.
+//   2. Secondary skill matches this task -> "secondary" tier.
+//   3. No match -> "base" tier.
 // ---------------------------------------------
 function getSkillTier(character, task) {
   // Build Palisade is a special case: which skill counts as "primary"
   // changes depending on which Fortification stage is currently
-  // active (earthwork stages favor Laborer, timber stages favor
+  // active (earthwork stages favor Fossier, timber stages favor
   // Carpenter) — see FORTIFICATION_STAGES' `skill` field. Every other
   // task uses the flat SKILL_FOR_TASK lookup below.
   const matchingSkill = task === "Build Palisade"
@@ -1060,15 +1035,8 @@ function getSkillTier(character, task) {
 
   if (!matchingSkill && !altPrimarySkill) return "base"; // task has no skill mapping at all
 
-  // Laborer is normally capped at "secondary" everywhere (see design
-  // doc: flat moderate tier, no primary bonus). But on Fortification
-  // stages where Laborer IS the stage's matching skill (earthwork:
-  // Bailey Grounds, Motte Ditch), that cap would wrongly demote them
-  // below a Carpenter who has no business out-digging a Laborer here —
-  // so check the direct match FIRST for this one case.
   if (matchingSkill && character.skill === matchingSkill) return "primary";
   if (altPrimarySkill && character.skill === altPrimarySkill) return "primary";
-  if (character.skill === "Laborer") return "secondary";
   if (matchingSkill && character.secondarySkill === matchingSkill) return "secondary";
   return "base";
 }
@@ -1114,16 +1082,16 @@ function rangeForTier(tier, ranges) {
 }
 
 
-// Woodcutting: Carpenter (primary) does best; Laborer or anyone
-// with Carpenter as Secondary gets a moderate bump; everyone else
-// manages, but less of the tree becomes usable wood. See
-// design-rationale.md.
+// Woodcutting: High-skill weight (Hewer). A Hewer reliably gets good
+// wood from a tree; anyone else genuinely struggles to fell and work
+// one cleanly — base tier's range is wide and low, reflecting real
+// untrained difficulty, not a modest penalty. See design-rationale.md.
 function resolveWoodcutting(character) {
   const tier = getSkillTier(character, "Woodcutting");
   const ranges = {
-    primary: [3, 6],
+    primary: [4, 7],
     secondary: [2, 4],
-    base: [0, 3]
+    base: [0, 2]
   };
   const [min, max] = rangeForTier(tier, ranges);
 
@@ -1148,22 +1116,69 @@ function resolveWoodcutting(character) {
 // Build Palisade: man-day accounting against the Fortification track's
 // locked stage costs (see FORTIFICATION_STAGES). Skill tier changes how
 // many man-days a character contributes in a day — it does not roll
-// for success/failure on its own. A small flat chance
-// (FORTIFICATION_FAILURE_CHANCE) exists for a day's labor to be lost
-// entirely to bad luck (rot, bad ground, weather) instead — see stage
-// `failureFlavor`. Tiers are 1 / 0.75 / 0.5 man-days per day rather
-// than a steeper spread: with the Carpenter almost always assigned
-// here in practice, the full 50-day track should take roughly 50 days
-// even at Seasoned tier, not a fraction of that.
+// Earthwork stages (Bailey Grounds, Motte Ditch): no-skill weight per
+// the locked model — "anyone can dig a ditch." A Fossier's presence
+// doesn't raise yield the way a Carpenter's does on timber stages; it
+// lowers the odds and severity of a rough day. Three-outcome severity
+// band per day of work, rather than one flat pass/fail roll:
+//   - Minor: full man-day contributed, flavor only.
+//   - Partial: half man-day contributed — real but reduced progress.
+//   - Lost day: 0 man-days — the day is a genuine loss (wood, if any,
+//     was already spent by the caller before this runs).
+// Fossier (primary) sits mostly in Minor, rarely Partial, almost
+// never Lost. No Fossier (base) sees meaningfully more Partial/Lost,
+// but Lost stays the rare tail — a tax, never a blocker, per the
+// locked "no-skill tasks are competent-by-default" principle.
+const EARTHWORK_SEVERITY_ODDS = {
+  primary:   { partial: 0.12, lost: 0.03 },  // Fossier
+  secondary: { partial: 0.22, lost: 0.07 },  // Fossier as Secondary
+  base:      { partial: 0.30, lost: 0.12 }   // no Fossier at all
+};
+
+const EARTHWORK_MINOR_FLAVOR = [
+  "fought rocky soil most of the day but still got the work moved forward",
+  "kept the pace steady despite the mud, and the line advanced",
+  "put in a long, unremarkable day at the ditch — solid progress for it"
+];
+const EARTHWORK_PARTIAL_FLAVOR = [
+  "the ground turned stubborn halfway through — {name}'s work slowed to a crawl, but some progress held",
+  "a root tangle ate half the day before {name} could work around it",
+  "{name} lost the morning to standing water in the cut, and only the afternoon's work counted for much"
+];
+const EARTHWORK_LOST_FLAVOR = [
+  "the wall gave out before it could be shored — a full day's work, undone",
+  "they struck rock a foot down and had to abandon the day's cut entirely",
+  "a sudden downpour turned the day's clearing back to mud and root-tangle overnight"
+];
+
+function resolveEarthworkDay(character, tier, stage) {
+  const odds = EARTHWORK_SEVERITY_ODDS[tier];
+  const roll = Math.random();
+  const verb = stage.name === "Bailey Grounds" ? "clearing" : "ditch";
+
+  if (roll < odds.lost) {
+    const line = EARTHWORK_LOST_FLAVOR[Math.floor(Math.random() * EARTHWORK_LOST_FLAVOR.length)];
+    return { manDays: 0, line: `${character.name} — ${line}.` };
+  }
+  if (roll < odds.lost + odds.partial) {
+    const template = EARTHWORK_PARTIAL_FLAVOR[Math.floor(Math.random() * EARTHWORK_PARTIAL_FLAVOR.length)];
+    return { manDays: 0.5, line: template.replace(/{name}/g, character.name).replace(/^./, c => c.toUpperCase()) + "." };
+  }
+  const line = EARTHWORK_MINOR_FLAVOR[Math.floor(Math.random() * EARTHWORK_MINOR_FLAVOR.length)];
+  return { manDays: 1, line: `${character.name} ${line} at the ${verb}.` };
+}
+
+// for success/failure on its own. Timber stages (Carpenter, high-
+// skill weight) keep the existing man-days-per-tier shape: 1 / 0.75 /
+// 0.5 man-days per day, tuned so a single Seasoned worker takes
+// roughly the stage's full listed cost in days, not a fraction of it.
+//
+// Earthwork stages (Fossier, no-skill weight) use a DIFFERENT shape —
+// see resolveEarthworkDay below — because "no-skill" per the locked
+// weight model means competent-by-default, not a yield gap. Fossier's
+// bonus is delay-avoidance, not extra man-days per day.
 function resolveBuildPalisade(character) {
   const tier = getSkillTier(character, "Build Palisade");
-  const manDaysByTier = {
-    primary: 1,
-    secondary: 0.75,
-    base: 0.5
-  };
-  const manDaysContributed = manDaysByTier[tier];
-
   const fort = gameState.fortification;
   const stage = FORTIFICATION_STAGES[fort.stageIndex];
 
@@ -1182,15 +1197,36 @@ function resolveBuildPalisade(character) {
 
   gameState.resources.wood -= woodCost;
 
-  // Quick placeholder failure roll — see FORTIFICATION_FAILURE_CHANCE.
-  // On a failure, wood is still spent (the attempt was made) but no
-  // man-days are contributed this trip. Not stage-progress-destructive
-  // (doesn't undo prior days) — just a lost day. To be refined in a
-  // design chat (per-stage odds, skill mitigation, whether failure
-  // should ever claw back existing progress).
-  if (Math.random() < FORTIFICATION_FAILURE_CHANCE) {
-    const lines = stage.failureFlavor;
-    return `${character.name} — ${lines[Math.floor(Math.random() * lines.length)]}.`;
+  const isEarthworkStage = stage.skill === "Fossier";
+  let manDaysContributed;
+  let earlyReturnLine = null;
+
+  if (isEarthworkStage) {
+    const result = resolveEarthworkDay(character, tier, stage);
+    manDaysContributed = result.manDays;
+    earlyReturnLine = result.line;
+  } else {
+    // Quick placeholder failure roll for timber stages — see
+    // FORTIFICATION_FAILURE_CHANCE. On a failure, wood is still spent
+    // (the attempt was made) but no man-days are contributed this
+    // trip. Not stage-progress-destructive — just a lost day. To be
+    // refined in a design chat (per-stage odds, whether failure
+    // should ever claw back existing progress).
+    if (Math.random() < FORTIFICATION_FAILURE_CHANCE) {
+      const lines = stage.failureFlavor;
+      return `${character.name} — ${lines[Math.floor(Math.random() * lines.length)]}.`;
+    }
+    const manDaysByTier = { primary: 1, secondary: 0.75, base: 0.5 };
+    manDaysContributed = manDaysByTier[tier];
+  }
+
+  // Earthwork's Lost-day outcome contributes 0 man-days and needs its
+  // own flavor line returned directly — it isn't a stage completion
+  // and shouldn't fall through to the standard "work continues" text.
+  // Minor/Partial (manDays > 0) still need to check for stage
+  // completion below, same as any other day of progress.
+  if (isEarthworkStage && manDaysContributed === 0) {
+    return earlyReturnLine;
   }
 
   fort.daysRemaining -= manDaysContributed;
@@ -1217,6 +1253,8 @@ function resolveBuildPalisade(character) {
       : ` There is nothing left to build — the works are complete.`;
     return `${character.name} finished the work: ${stageJustCompleted.doneLabel}.${nextLine}`;
   }
+
+  if (isEarthworkStage) return earlyReturnLine;
 
   return buildPalisadeFlavor(character, tier, stage, fort);
 }
@@ -1252,21 +1290,9 @@ function buildPalisadeFlavor(character, tier, stage, fort) {
     stageDescriptor = `the ${stage.name.toLowerCase()} work is nearly finished`;
   }
 
-  // Earthwork stages (Bailey Grounds, Motte Ditch) are dig/clear labor
-  // — Carpenter's "squares the timbers" phrasing doesn't fit there.
-  // Timber stages (Palisade Stakes onward) keep the original wording.
-  const isEarthwork = stage.skill === "Laborer";
-
-  if (isEarthwork) {
-    if (tier === "primary") {
-      return `${character.name} worked the ground steadily, making efficient use of every hour — ${stageDescriptor}.`;
-    }
-    if (tier === "secondary") {
-      return `${character.name} put in a solid day's digging, if a bit unevenly paced — ${stageDescriptor}.`;
-    }
-    return `${character.name} struggled with the ground, unused to this kind of labor — ${stageDescriptor}.`;
-  }
-
+  // Only called for timber stages now — earthwork stages resolve
+  // entirely through resolveEarthworkDay and return before reaching
+  // here (see resolveBuildPalisade). No branch needed for earthwork.
   if (tier === "primary") {
     return `${character.name} squared the timbers and set them true, working steadily — ${stageDescriptor}.`;
   }
@@ -1276,9 +1302,6 @@ function buildPalisadeFlavor(character, tier, stage, fort) {
   return `${character.name} wrestled the logs into place, gaps and all, slow and uneven — ${stageDescriptor}.`;
 }
 
-// Hunt: Veneur (primary) gets more raw food, reliably; a moderate
-// tier sits between; base tier gets little. See design-rationale.md.
-//
 // Updated 2026-07-21: game description now scales WITH the actual
 // yield instead of being picked independently — previously `catch_`
 // was rolled from the full list regardless of `rawYield`, so a
@@ -1308,12 +1331,15 @@ function describeCatch(rawYield) {
   return options[Math.floor(Math.random() * options.length)];
 }
 
+// Hunt: High-skill weight (Veneur). Untrained hunting is genuinely
+// unreliable — base tier whiffs often, reflecting real difficulty
+// rather than a modest penalty. See design-rationale.md.
 function resolveHunt(character) {
   const tier = getSkillTier(character, "Hunt");
   const ranges = {
-    primary: [2, 6],
+    primary: [3, 7],
     secondary: [1, 4],
-    base: [0, 3]
+    base: [0, 2]
   };
   const [min, max] = rangeForTier(tier, ranges);
 
@@ -1338,17 +1364,29 @@ function resolveHunt(character) {
   return flavor[qualityTier] || `${character.name} brought down ${catch_}.`;
 }
 
-// Cook task: Master Cook converts raw food into rations; also converts forage food
-// into rations at 2:1. Does both in the same day if available.
-// Three tiers of conversion efficiency. See design-rationale.md.
+// Cook task: Low-skill, conversion-based weight (Master Cook). Per
+// the locked Cook Conversion Table, the rate is a ROLLED RANGE per
+// tier, not a fixed multiplier — a flat number is something a player
+// would optimize around, which breaks "skill shifts odds, never
+// guarantees outcomes." A Master Cook is usually good and can have a
+// genuinely great day; a Base-tier cook is usually mediocre and can
+// have a genuinely wasteful one. Converts raw food into rations and
+// forage food into rations at 2:1; does both in the same day if
+// available. See design-rationale.md.
+const COOK_CONVERSION_RANGE = {
+  primary: [1.3, 1.8],    // Master Cook — usually good, occasionally excellent
+  secondary: [0.9, 1.1],  // reliable, roughly break-even
+  base: [0.4, 0.6]        // inconsistent, meaningfully wasteful
+};
+
+function rollConversionRate(tier) {
+  const [min, max] = COOK_CONVERSION_RANGE[tier];
+  return min + Math.random() * (max - min);
+}
+
 function resolveCook(character) {
   const tier = getSkillTier(character, "Cook");
-  const conversionRateByTier = {
-    primary: 0.9,
-    secondary: 0.7,
-    base: 0.5
-  };
-  const conversionRate = conversionRateByTier[tier];
+  const conversionRate = rollConversionRate(tier);
 
   const rawFoodAvailable = gameState.resources.rawFood;
   const forageFoodAvailable = gameState.resources.forageFood;
@@ -1402,9 +1440,12 @@ function resolvePerimeterWatch(character) {
   return `${character.name} stood watch at the perimeter. No trouble today.`;
 }
 
-// Forage: finds food that's edible without cooking. Also has a
-// chance of turning up more nearby trees. Three tiers of yield.
-// See design-rationale.md.
+// Forage: High-skill weight (Gatherer). Also has a chance of turning
+// up more nearby trees, independent of tier — even an untrained
+// forager can stumble onto a stand of trees; that's luck, not skill.
+// Base tier's yield is deliberately weak and whiff-prone without a
+// Gatherer present — per the locked weight model, Forage should not
+// be reliable without one. See design-rationale.md.
 function resolveForage(character) {
   const tier = getSkillTier(character, "Forage");
   const roll = Math.random();
@@ -1417,9 +1458,9 @@ function resolveForage(character) {
   }
 
   const ranges = {
-    primary: [2, 5],
+    primary: [3, 6],
     secondary: [1, 3],
-    base: [0, 2]
+    base: [0, 1]
   };
   const [min, max] = rangeForTier(tier, ranges);
   const foundFood = rollYield(min, max);
@@ -1506,7 +1547,7 @@ function resolveScoutForEnemiesForDay(scoutingCharacters) {
     // Man-at-Arms's day-estimate miss is capped at "off by one" (maxSpread
     // 1) rather than the wider miss everyone else risks (maxSpread 2)
     // — a soldier reading enemy movement judges timing closely even
-    // when he's not dead-on. Veneur/Laborer keep the wider miss.
+    // when he's not dead-on. Everyone else keeps the wider miss.
     const daysMaxSpread = isSoldier ? 1 : 2;
 
     const daysEstimate = rollEstimate(daysUntilWave, daysAccuracy, daysMaxSpread);
