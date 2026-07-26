@@ -1,8 +1,8 @@
 <!--
   Barbarians — Prototype
-  Version: 0.3.0.0
+  Version: 0.4.0.0
   Author: Mason Dutton
-  Last updated: 2026-07-23
+  Last updated: 2026-07-25
 
   Full changelog is kept separately (not in this file); see
   barbarians-changelog.md, attached to the project.
@@ -10,7 +10,7 @@
   Single-file HTML/CSS/JS prototype. No build step, no dependencies —
   open directly in a browser or serve as a static site (e.g. GitHub Pages).
   This is Phase 1 (The Vanguard) only: character generation, vanguard
-  selection, daily task assignment, and outrider raid mechanics.
+  selection, daily action assignment, and outrider raid mechanics.
 
   Comments in this file explain WHAT the code does. For WHY specific
   numbers/rules were chosen, see design-rationale.md (repo root).
@@ -385,7 +385,7 @@
 <body>
 
 <h1>Barbarians</h1>
-<div id="versionTag">v0.3.0.0 — prototype, unreleased</div>
+<div id="versionTag">v0.4.0.0 — prototype, unreleased</div>
 
 <div id="selectionScreen">
   <p id="selectionInstructions"></p>
@@ -551,31 +551,29 @@ const BACKSTORY_POOL = {
 // (Laborer section) for why the generalist-fallback role was cut.
 const ALL_SKILLS = ["Carpenter", "Veneur", "Master Cook", "Man-at-Arms", "Gatherer", "Hewer", "Fossier"];
 
-// The tasks a settler can be assigned to for the day.
-// No task is skill-gated — any settler can attempt any task.
+// The actions a settler can be assigned to for the day.
+// No action is skill-gated — any settler can attempt any action.
 // Skill only affects how well they do it (see resolve* functions).
-const TASK_POOL = ["Woodcutting", "Build Palisade", "Hunt", "Cook", "Perimeter Watch", "Forage", "Scout"];
+const ACTION_POOL = ["Fell timber", "Build Palisade", "Stalk beasts", "Cook provisions", "Keep ward", "Gather mast", "Spy out"];
 
-// Player-facing label for a task in the assignment dropdown. Every
-// task shows its own name verbatim EXCEPT "Build Palisade" — that
-// internal task id stays fixed (it's what resolveDayForCharacter,
-// SKILL_FOR_TASK, etc. all key off of), but the label shown to the
-// player reflects whichever Fortification stage is currently active,
-// so the dropdown reads "Dig Motte Ditch" while that stage is live,
-// then "Raise Palisade Stakes" once it advances, etc.
-const FORTIFICATION_TASK_VERB = {
-  "Bailey Grounds": "Clear Bailey Grounds",
-  "Motte Ditch": "Dig Motte Ditch",
-  "Palisade Stakes": "Raise Palisade Stakes",
-  "Bridgeway": "Set Bridgeway",
-  "Ramparts": "Build Ramparts",
-  "Watchtower": "Erect Watchtower"
+// Player-facing label for the Build Palisade action in the assignment
+// dropdown. "Build Palisade" stays as the internal action id (it's what
+// resolveCharacterAction, SKILL_FOR_ACTION, etc. all key off of), but
+// the label shown to the player reflects whichever Fortification stage
+// is currently active.
+const FORTIFICATION_ACTION_VERB = {
+  "Bailey Grounds": "Assart grounds",
+  "Motte Ditch":    "Delve fosse",
+  "Palisade Stakes":"Place palls",
+  "Bridgeway":      "Erect bridge",
+  "Ramparts":       "Construct wallwalk",
+  "Watchtower":     "Build garret"
 };
 
-function taskDisplayLabel(task) {
-  if (task !== "Build Palisade") return task;
+function actionDisplayLabel(action) {
+  if (action !== "Build Palisade") return action;
   const stage = FORTIFICATION_STAGES[gameState.fortification.stageIndex];
-  return stage ? FORTIFICATION_TASK_VERB[stage.name] : "Fortification (complete)";
+  return stage ? FORTIFICATION_ACTION_VERB[stage.name] : "Fortification (complete)";
 }
 
 // Fortification track — locked man-day costs from the design doc.
@@ -665,23 +663,45 @@ function pickUniqueNames(count) {
   return shuffled.slice(0, count);
 }
 
-// Skills are rolled independently per settler — overlaps
-// and gaps are allowed on purpose. A settlement with two
-// Master Cooks and no Man-at-Arms is a valid (and interesting) outcome.
-function rollSkill() {
-  const index = Math.floor(Math.random() * ALL_SKILLS.length);
-  return ALL_SKILLS[index];
+// Rolls one tier for a non-headline role. Probabilities are role-
+// agnostic — scales automatically as ALL_SKILLS grows.
+// 50% Base / 30% Practiced / 20% Poor.
+function rollTier() {
+  const r = Math.random();
+  if (r < 0.50) return "Base";
+  if (r < 0.80) return "Practiced";
+  return "Poor";
 }
 
-// Rolls a Secondary skill, guaranteed different from the given
-// Primary skill. Every character has exactly one Primary and one
-// Secondary skill, fully random pairing — they don't need to relate
-// narratively (e.g. a Master Cook can roll Man-at-Arms as Secondary).
-// With Laborer retired, no role needs special-casing out of this pool.
-function rollSecondarySkill(primarySkill) {
-  const options = ALL_SKILLS.filter(skill => skill !== primarySkill);
-  const index = Math.floor(Math.random() * options.length);
-  return options[index];
+// Builds the full tier map for a character. The headline role is always
+// Seasoned. Among the remaining roles, exactly 1 is guaranteed Practiced
+// and 1 is guaranteed Poor — the rest roll freely via rollTier().
+// This ensures every character always has at least one hint of each kind
+// to surface, while still allowing more hidden Practiced/Poor beyond the
+// guaranteed ones. Scales automatically as ALL_SKILLS grows.
+function generateCharacterTiers(headlineRole) {
+  const tiers = { [headlineRole]: "Seasoned" };
+  const others = ALL_SKILLS.filter(r => r !== headlineRole);
+
+  // Shuffle the non-headline roles so guaranteed slots are random picks.
+  const shuffled = [...others].sort(() => Math.random() - 0.5);
+
+  // First two slots: one guaranteed Practiced, one guaranteed Poor.
+  tiers[shuffled[0]] = "Practiced";
+  tiers[shuffled[1]] = "Poor";
+
+  // Remaining roles roll freely — may produce additional Practiced/Poor.
+  for (let i = 2; i < shuffled.length; i++) {
+    tiers[shuffled[i]] = rollTier();
+  }
+
+  return tiers;
+}
+
+// Picks one role at random from ALL_SKILLS to be the character's
+// headline (Seasoned) role.
+function rollHeadlineRole() {
+  return ALL_SKILLS[Math.floor(Math.random() * ALL_SKILLS.length)];
 }
 
 // Picks one backstory sentence matching the given skill.
@@ -715,25 +735,37 @@ function rollStartingSupplies(skill) {
   return supplies;
 }
 
-// Builds one settler object. Every settler has a Primary skill
-// (labeled on the card, drives the best yield tier) and a Secondary
-// skill (shown smaller/unlabeled underneath, drives a moderate tier
-// on whichever task it matches). See design-rationale.md.
+// Builds one settler object. Each settler has a headline role (their
+// Seasoned tier — shown on the card) and a full tiers map covering
+// every role in ALL_SKILLS. The tiers map is the authoritative source
+// for all skill resolution; character.skill is kept as a convenience
+// alias for the headline role so card rendering and backstory/supply
+// lookups don't need to change until 1e.
 function createSettler(name) {
-  const skill = rollSkill();
-  const secondarySkill = rollSecondarySkill(skill);
+  const headlineRole = rollHeadlineRole();
+  const tiers = generateCharacterTiers(headlineRole);
+  // Pick one Practiced and one Poor to surface as hints in text.
+  // At least one of each is guaranteed by generateCharacterTiers.
+  // Additional ones beyond the guaranteed pair stay hidden — intended variance.
+  const practicedRoles = ALL_SKILLS.filter(r => tiers[r] === "Practiced");
+  const poorRoles      = ALL_SKILLS.filter(r => tiers[r] === "Poor");
+  const practicedHint  = practicedRoles[Math.floor(Math.random() * practicedRoles.length)] || null;
+  const poorHint       = poorRoles[Math.floor(Math.random() * poorRoles.length)] || null;
+
   return {
     id: name.toLowerCase(),
     name: name,
-    skill: skill,                      // Primary skill
-    secondarySkill: secondarySkill,    // Secondary skill
-    backstory: pickBackstory(skill),
+    skill: headlineRole,         // alias for headline role — card render & lookups
+    tiers,                       // full role→tier map, authoritative for all resolution
+    practicedHint,               // one Practiced role surfaced in text (may be null)
+    poorHint,                    // one Poor role surfaced in text (may be null)
+    backstory: pickBackstory(headlineRole),
     alive: true,
-    currentTask: null,  // assigned once the day simulation exists
-    position: "campsite", // everyone starts safe, at the campsite
-    suppliesBrought: rollStartingSupplies(skill), // what this candidate adds if chosen
-    daysWithoutFood: 0,  // 0 = fine, 1 = hungry, 2 = starving, 3 = dead
-    armed: true // placeholder — see design-rationale.md
+    currentAction: null,
+    position: "campsite",
+    suppliesBrought: rollStartingSupplies(headlineRole),
+    daysWithoutFood: 0,
+    armed: true
   };
 }
 
@@ -748,23 +780,62 @@ function generateSettlers() {
 // ---------------------------------------------
 // VANGUARD SELECTION
 // Before the day loop starts, the player is shown a pool of
-// candidate men and picks exactly 5 to form the vanguard.
+// candidate men and picks exactly VANGUARD_SIZE to form the vanguard
+// (currently equal to the live role count in ALL_SKILLS).
 // A limited number of rerolls lets the player regenerate
 // whichever candidates they haven't already picked.
 // ---------------------------------------------
 
 const CANDIDATE_POOL_SIZE = 8;
 const MAX_REROLLS = 3;
+// Vanguard size is hardcoded — it's the number of men the player
+// fields, not derived from the skill pool. ALL_SKILLS may grow as
+// new roles unlock; VANGUARD_SIZE stays 5 unless a design decision
+// changes the vanguard headcount explicitly.
+const VANGUARD_SIZE = 5;
 
 let candidatePool = [];   // the current list of choosable men
 let selectedIds = [];     // ids of candidates the player has picked
 let rerollsRemaining = MAX_REROLLS;
 
-// Builds a fresh pool of candidate men. Uses the same
-// createSettler building block as the old direct-generation path.
+// Builds a fresh pool of candidate men with two enforced constraints:
+//
+// 1. Unique full tier profiles — no two candidates may share an identical
+//    role→tier map across all roles (checked via JSON.stringify).
+//
+// 2. Headline role cap — no single role may appear as the headline
+//    (Seasoned) role more than MAX_SAME_HEADLINE times. With 7 roles and
+//    8 cards, one role will always appear twice; this cap prevents the
+//    3+ clustering that makes pools feel samey. Rerolls the headline
+//    role (via createSettler) until the cap is satisfied.
+//
+// Both constraints loop with an attempt ceiling to avoid infinite loops
+// in degenerate edge cases (e.g. very small role pools).
+const MAX_SAME_HEADLINE = 2;
+
 function generateCandidatePool(count) {
   const names = pickUniqueNames(count);
-  return names.map(createSettler);
+  const pool = [];
+  const seenProfiles = new Set();
+  const headlineCounts = {};
+
+  for (const name of names) {
+    let candidate;
+    let attempts = 0;
+    do {
+      candidate = createSettler(name);
+      const profileKey = JSON.stringify(candidate.tiers);
+      const headlineOk = (headlineCounts[candidate.skill] || 0) < MAX_SAME_HEADLINE;
+      const profileOk  = !seenProfiles.has(profileKey);
+      if (headlineOk && profileOk) break;
+      attempts++;
+    } while (attempts < 30);
+
+    seenProfiles.add(JSON.stringify(candidate.tiers));
+    headlineCounts[candidate.skill] = (headlineCounts[candidate.skill] || 0) + 1;
+    pool.push(candidate);
+  }
+  return pool;
 }
 
 // Renders the candidate pool as clickable cards.
@@ -790,11 +861,15 @@ function renderCandidatePool() {
     const isSelected = selectedIds.includes(candidate.id);
     const card = document.createElement("div");
     card.className = isSelected ? "candidate selected" : "candidate";
-    const secondaryLine = `<div class="secondary-skill">${candidate.secondarySkill}</div>`;
+    const hintLine = `<div class="secondary-skill">${
+      [candidate.practicedHint ? `Shows an aptitude for ${candidate.practicedHint}.` : "",
+       candidate.poorHint      ? `A poor hand at ${candidate.poorHint}.`             : ""]
+      .filter(Boolean).join(" ")
+    }</div>`;
     card.innerHTML = `
       <div class="name">${candidate.name}</div>
       <div class="skill">${candidate.skill}</div>
-      ${secondaryLine}
+      ${hintLine}
       <div class="backstory">${candidate.name}, ${candidate.backstory}</div>
       <div class="supplies">${formatSupplies(candidate.suppliesBrought)}</div>
     `;
@@ -803,22 +878,22 @@ function renderCandidatePool() {
   });
 
   document.getElementById("selectionInstructions").textContent =
-    `Choose 5 men for the vanguard. Selected: ${selectedIds.length} / 5.`;
+    `Choose ${VANGUARD_SIZE} men for the vanguard. Selected: ${selectedIds.length} / ${VANGUARD_SIZE}.`;
 
   document.getElementById("rerollCount").textContent =
     `Rerolls remaining: ${rerollsRemaining}`;
 
   document.getElementById("rerollBtn").disabled = rerollsRemaining === 0;
-  document.getElementById("confirmVanguardBtn").disabled = selectedIds.length !== 5;
+  document.getElementById("confirmVanguardBtn").disabled = selectedIds.length !== VANGUARD_SIZE;
 }
 
 // Adds or removes a candidate from the selection when clicked.
-// Selection is capped at 5 — clicking a 6th candidate does nothing
-// until the player deselects one first.
+// Selection is capped at VANGUARD_SIZE — clicking past the cap does
+// nothing until the player deselects one first.
 function toggleCandidateSelection(candidateId) {
   if (selectedIds.includes(candidateId)) {
     selectedIds = selectedIds.filter(id => id !== candidateId);
-  } else if (selectedIds.length < 5) {
+  } else if (selectedIds.length < VANGUARD_SIZE) {
     selectedIds.push(candidateId);
   }
   renderCandidatePool();
@@ -841,15 +916,36 @@ function rerollCandidates() {
   renderCandidatePool();
 }
 
-// Generates new candidates while avoiding name collisions
-// with names already in play (the kept candidates).
+// Generates new candidates while avoiding name collisions with kept
+// candidates, and respecting the same headline-role cap as the initial
+// pool. Counts existing headline roles from the kept candidates so the
+// cap applies across the whole pool, not just the fresh batch.
 function generateFreshCandidates(count, excludeNames) {
+  const keptCandidates = candidatePool.filter(c => selectedIds.includes(c.id));
+  const headlineCounts = {};
+  keptCandidates.forEach(c => {
+    headlineCounts[c.skill] = (headlineCounts[c.skill] || 0) + 1;
+  });
+
   const availableNames = NAME_POOL.filter(n => !excludeNames.includes(n));
   const shuffled = [...availableNames].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, count).map(createSettler);
+  const fresh = [];
+
+  for (const name of shuffled.slice(0, count)) {
+    let candidate;
+    let attempts = 0;
+    do {
+      candidate = createSettler(name);
+      attempts++;
+    } while ((headlineCounts[candidate.skill] || 0) >= MAX_SAME_HEADLINE && attempts < 30);
+
+    headlineCounts[candidate.skill] = (headlineCounts[candidate.skill] || 0) + 1;
+    fresh.push(candidate);
+  }
+  return fresh;
 }
 
-// Called when the player confirms their 5 chosen men.
+// Called when the player confirms their chosen vanguard (VANGUARD_SIZE men).
 // Moves the selected candidates into gameState, adds up what they
 // brought with them into the starting resource pool, and starts the game.
 function confirmVanguard() {
@@ -883,7 +979,7 @@ function applyStartingSupplies(chosenCharacters) {
 // DISPLAY
 // Rendering is kept separate from simulation logic.
 // This function only reads gameState — it never changes it
-// (task changes happen in handleTaskChange, triggered by the dropdown).
+// (action changes happen in handleActionChange, triggered by the dropdown).
 // ---------------------------------------------
 function renderRoster() {
   const container = document.getElementById("roster");
@@ -896,20 +992,27 @@ function renderRoster() {
     if (character.alive) {
       const stage = hungerStage(character);
       const hungerTag = stage ? `<div class="hunger-tag ${stage}">${stage}</div>` : "";
-      const secondaryLine = `<div class="secondary-skill">${character.secondarySkill}</div>`;
+      // Build hint line from guaranteed practicedHint and poorHint.
+      // Role names are used directly — 1e card redesign will style these properly.
+      const hintLine = character.practicedHint || character.poorHint
+        ? `<div class="secondary-skill">${[
+            character.practicedHint ? `Shows an aptitude for ${character.practicedHint}.` : "",
+            character.poorHint      ? `A poor hand at ${character.poorHint}.`             : ""
+          ].filter(Boolean).join(" ")}</div>`
+        : "";
 
       card.innerHTML = `
         <div class="name">${character.name}</div>
         <div class="skill">${character.skill}</div>
-        ${secondaryLine}
+        ${hintLine}
         ${hungerTag}
         <div class="backstory">${character.name}, ${character.backstory}</div>
         <div class="task-row">
-          <label>Task: </label>
+          <label>Action: </label>
           <select data-character-id="${character.id}">
-            <option value="">-- assign a task --</option>
-            ${TASK_POOL.map(task =>
-              `<option value="${task}">${taskDisplayLabel(task)}</option>`
+            <option value="">-- assign an action --</option>
+            ${ACTION_POOL.map(action =>
+              `<option value="${action}">${actionDisplayLabel(action)}</option>`
             ).join("")}
           </select>
         </div>
@@ -926,34 +1029,31 @@ function renderRoster() {
 
   // Wire up dropdowns only for characters still alive.
   container.querySelectorAll("select").forEach(dropdown => {
-    dropdown.addEventListener("change", handleTaskChange);
+    dropdown.addEventListener("change", handleActionChange);
   });
 }
 
-// Called whenever a player picks a task from a dropdown.
-// Updates the matching character's currentTask in gameState,
+// Called whenever a player picks an action from a dropdown.
+// Updates the matching character's currentAction in gameState,
 // then checks whether every settler now has an assignment.
-// Fires when a task dropdown changes for a given settler. Updates
-// that settler's assignment in gameState, then re-checks whether
-// the Start Day button should be enabled.
-function handleTaskChange(event) {
+function handleActionChange(event) {
   const characterId = event.target.getAttribute("data-character-id");
-  const chosenTask = event.target.value;
+  const chosenAction = event.target.value;
 
   const character = gameState.characters.find(c => c.id === characterId);
-  character.currentTask = chosenTask || null;
+  character.currentAction = chosenAction || null;
 
   updateStartDayAvailability();
 }
 
 // Enables the Start Day button only once every living vanguard
-// member has a task assigned. Shows a status message either way.
+// member has an action assigned. Shows a status message either way.
 function updateStartDayAvailability() {
   const button = document.getElementById("startDayBtn");
   const status = document.getElementById("assignmentStatus");
 
   const unassignedCount = gameState.characters.filter(
-    c => c.alive && !c.currentTask
+    c => c.alive && !c.currentAction
   ).length;
 
   if (unassignedCount === 0) {
@@ -961,7 +1061,7 @@ function updateStartDayAvailability() {
     status.textContent = "All of the vanguard is assigned. Ready to start the day.";
   } else {
     button.disabled = true;
-    status.textContent = `${unassignedCount} of the vanguard still need${unassignedCount === 1 ? "s" : ""} a task.`;
+    status.textContent = `${unassignedCount} of the vanguard still need${unassignedCount === 1 ? "s" : ""} an action.`;
   }
 }
 
@@ -972,73 +1072,80 @@ function updateStartDayAvailability() {
 // None of these touch the DOM — display reads gameState after.
 // ---------------------------------------------
 
-// Maps each skill-gated task to the skill that's considered a
-// match for it. Used by getSkillTier() to figure out whether a
-// character's Primary or Secondary skill applies to a given task.
-// Per the locked Role→task table (barbarians-design-doc-characters-
-// 20260721.md): Woodcutting→Hewer, Forage→Gatherer, Hunt/Scout stay
-// with Veneur (Scout's Veneur+Man-at-Arms combo is untouched by 1b —
-// Outrider is tabled, blocked on Threat). Build Palisade's skill is
-// resolved per-stage instead (see FORTIFICATION_STAGES), so it has
-// no flat entry here.
-const SKILL_FOR_TASK = {
-  "Woodcutting": "Hewer",
-  "Hunt": "Veneur",
-  "Cook": "Master Cook",
-  "Forage": "Gatherer",
-  "Scout": "Veneur"     // unchanged — Outrider is tabled, see design doc
+// Maps each skill-gated action to the role that's considered a match
+// for it. Used by getSkillTier() to determine which tier applies.
+// Build Palisade's skill is resolved per-stage instead (see
+// FORTIFICATION_STAGES), so it has no flat entry here.
+const SKILL_FOR_ACTION = {
+  "Fell timber":    "Hewer",
+  "Stalk beasts":   "Veneur",
+  "Cook provisions":"Master Cook",
+  "Gather mast":    "Gatherer",
+  "Spy out":        "Veneur"   // Outrider is tabled, see design doc
 };
 
-// Tasks where a SECOND skill also counts as "primary", alongside
-// whatever SKILL_FOR_TASK says (or, for Perimeter Watch, as the
-// only primary skill — Watch has no SKILL_FOR_TASK entry at all).
-// Man-at-Arms reads terrain and threat the way a Veneur reads game —
-// different training, same practical result on these two tasks.
-const SECONDARY_PRIMARY_TASK_SKILLS = {
-  "Perimeter Watch": "Man-at-Arms",
-  "Scout": "Man-at-Arms"
+// Actions where a SECOND role also qualifies as primary-band, alongside
+// whatever SKILL_FOR_ACTION says (or, for Keep ward, as the only
+// primary role — Keep ward has no SKILL_FOR_ACTION entry at all).
+const SECONDARY_PRIMARY_ACTION_SKILLS = {
+  "Keep ward": "Man-at-Arms",
+  "Spy out":   "Man-at-Arms"
 };
 
 // ---------------------------------------------
 // SKILL TIER RESOLUTION
 //
-// Every skill-gated task has three possible tiers: "primary" (best),
-// "secondary" (moderate — this character's Secondary skill happens
-// to match), and "base" (no match at all — the character has no
-// training relevant to this task).
+// Reads a character's tier for the relevant role from character.tiers,
+// then maps the four stored values (Seasoned/Practiced/Base/Poor) to
+// the three mechanical bands the resolvers use:
 //
-// As of 1b, WHAT each tier actually means mechanically is no longer
-// flat across every task — it depends on the task's skill weight
-// (see barbarians-design-doc-characters-20260721.md, Task Skill-
-// Weight Model). getSkillTier() only answers "which of the three
-// tiers applies" — each resolver (resolveHunt, resolveCook, etc.)
-// decides how big a gap that tier implies for its own task. This is
-// the load-bearing change in 1b: previously every task read the same
-// tier into the same shape of numeric gap; now Hunt's "base" tier
-// and Cook's "base" tier can (and do) mean very different things.
+//   Seasoned  → "primary"   (best yield/odds)
+//   Practiced → "secondary" (moderate)
+//   Base      → "base"      (untrained — competent floor, not blocked)
+//   Poor      → "poor"      (below floor — real penalty)
 //
-// Resolution order (first match wins):
-//   1. Primary skill matches this task -> "primary" tier.
-//   2. Secondary skill matches this task -> "secondary" tier.
-//   3. No match -> "base" tier.
+// Each resolver (resolveHunt, resolveCook, etc.) defines what each
+// band means for its own task — getSkillTier only answers which band
+// applies, not how big the gap is.
+//
+// Tasks with two qualifying roles (Scout, Perimeter Watch) take the
+// better of the two tier readings — a Man-at-Arms on Scout duty uses
+// whichever of Veneur or Man-at-Arms gives him the higher band.
 // ---------------------------------------------
-function getSkillTier(character, task) {
-  // Build Palisade is a special case: which skill counts as "primary"
-  // changes depending on which Fortification stage is currently
-  // active (earthwork stages favor Fossier, timber stages favor
-  // Carpenter) — see FORTIFICATION_STAGES' `skill` field. Every other
-  // task uses the flat SKILL_FOR_TASK lookup below.
-  const matchingSkill = task === "Build Palisade"
+
+// Maps stored tier strings to mechanical band strings.
+const TIER_TO_BAND = {
+  "Seasoned":  "primary",
+  "Practiced": "secondary",
+  "Base":      "base",
+  "Poor":      "poor"
+};
+
+// Returns the better of two mechanical bands.
+function betterBand(a, b) {
+  const order = ["primary", "secondary", "base", "poor"];
+  return order.indexOf(a) <= order.indexOf(b) ? a : b;
+}
+
+function getSkillTier(character, action) {
+  // Build Palisade: primary skill changes per Fortification stage.
+  const matchingSkill = action === "Build Palisade"
     ? currentFortificationSkill()
-    : SKILL_FOR_TASK[task];
-  const altPrimarySkill = SECONDARY_PRIMARY_TASK_SKILLS[task] || null;
+    : SKILL_FOR_ACTION[action];
+  const altSkill = SECONDARY_PRIMARY_ACTION_SKILLS[action] || null;
 
-  if (!matchingSkill && !altPrimarySkill) return "base"; // task has no skill mapping at all
+  if (!matchingSkill && !altSkill) return "base";
 
-  if (matchingSkill && character.skill === matchingSkill) return "primary";
-  if (altPrimarySkill && character.skill === altPrimarySkill) return "primary";
-  if (matchingSkill && character.secondarySkill === matchingSkill) return "secondary";
-  return "base";
+  const mainBand = matchingSkill && character.tiers[matchingSkill]
+    ? TIER_TO_BAND[character.tiers[matchingSkill]]
+    : "base";
+  const altBand = altSkill && character.tiers[altSkill]
+    ? TIER_TO_BAND[character.tiers[altSkill]]
+    : "base";
+
+  return matchingSkill && altSkill
+    ? betterBand(mainBand, altBand)
+    : matchingSkill ? mainBand : altBand;
 }
 
 // Which skill is "primary" for whichever Fortification stage is
@@ -1084,14 +1191,14 @@ function rangeForTier(tier, ranges) {
 
 // Woodcutting: High-skill weight (Hewer). A Hewer reliably gets good
 // wood from a tree; anyone else genuinely struggles to fell and work
-// one cleanly — base tier's range is wide and low, reflecting real
-// untrained difficulty, not a modest penalty. See design-rationale.md.
+// one cleanly. Poor tier can waste the tree almost entirely.
 function resolveWoodcutting(character) {
-  const tier = getSkillTier(character, "Woodcutting");
+  const tier = getSkillTier(character, "Fell timber");
   const ranges = {
-    primary: [4, 7],
+    primary:   [4, 7],
     secondary: [2, 4],
-    base: [0, 2]
+    base:      [0, 2],
+    poor:      [0, 1]   // likely to ruin or waste most of the tree
   };
   const [min, max] = rangeForTier(tier, ranges);
 
@@ -1104,6 +1211,9 @@ function resolveWoodcutting(character) {
   gameState.environment.treesRemainingNearby -= 1;
   gameState.resources.wood += logs;
 
+  if (tier === "poor" && logs === 0) {
+    return `${character.name} felled a tree but made a ruin of the work — the wood split wrong and nothing came of it.`;
+  }
   const flavor = {
     nothing: `${character.name} felled a tree but the wood was rotten through — nothing usable came of it.`,
     poor: `${character.name} felled a tree and managed only ${logs} rough logs from it.`,
@@ -1130,9 +1240,10 @@ function resolveWoodcutting(character) {
 // but Lost stays the rare tail — a tax, never a blocker, per the
 // locked "no-skill tasks are competent-by-default" principle.
 const EARTHWORK_SEVERITY_ODDS = {
-  primary:   { partial: 0.12, lost: 0.03 },  // Fossier
-  secondary: { partial: 0.22, lost: 0.07 },  // Fossier as Secondary
-  base:      { partial: 0.30, lost: 0.12 }   // no Fossier at all
+  primary:   { partial: 0.12, lost: 0.03 },  // Fossier Seasoned
+  secondary: { partial: 0.22, lost: 0.07 },  // Fossier Practiced
+  base:      { partial: 0.30, lost: 0.12 },  // no Fossier
+  poor:      { partial: 0.45, lost: 0.22 }   // actively bad at groundwork — real drag
 };
 
 const EARTHWORK_MINOR_FLAVOR = [
@@ -1216,7 +1327,7 @@ function resolveBuildPalisade(character) {
       const lines = stage.failureFlavor;
       return `${character.name} — ${lines[Math.floor(Math.random() * lines.length)]}.`;
     }
-    const manDaysByTier = { primary: 1, secondary: 0.75, base: 0.5 };
+    const manDaysByTier = { primary: 1, secondary: 0.75, base: 0.5, poor: 0.25 };
     manDaysContributed = manDaysByTier[tier];
   }
 
@@ -1335,11 +1446,12 @@ function describeCatch(rawYield) {
 // unreliable — base tier whiffs often, reflecting real difficulty
 // rather than a modest penalty. See design-rationale.md.
 function resolveHunt(character) {
-  const tier = getSkillTier(character, "Hunt");
+  const tier = getSkillTier(character, "Stalk beasts");
   const ranges = {
-    primary: [3, 7],
+    primary:   [3, 7],
     secondary: [1, 4],
-    base: [0, 2]
+    base:      [0, 2],
+    poor:      [0, 1]   // more likely to spook game than catch it
   };
   const [min, max] = rangeForTier(tier, ranges);
 
@@ -1374,9 +1486,10 @@ function resolveHunt(character) {
 // forage food into rations at 2:1; does both in the same day if
 // available. See design-rationale.md.
 const COOK_CONVERSION_RANGE = {
-  primary: [1.3, 1.8],    // Master Cook — usually good, occasionally excellent
+  primary:   [1.3, 1.8],  // Master Cook — usually good, occasionally excellent
   secondary: [0.9, 1.1],  // reliable, roughly break-even
-  base: [0.4, 0.6]        // inconsistent, meaningfully wasteful
+  base:      [0.4, 0.6],  // inconsistent, meaningfully wasteful
+  poor:      [0.1, 0.3]   // badly inept — food is largely ruined
 };
 
 function rollConversionRate(tier) {
@@ -1385,7 +1498,7 @@ function rollConversionRate(tier) {
 }
 
 function resolveCook(character) {
-  const tier = getSkillTier(character, "Cook");
+  const tier = getSkillTier(character, "Cook provisions");
   const conversionRate = rollConversionRate(tier);
 
   const rawFoodAvailable = gameState.resources.rawFood;
@@ -1422,6 +1535,9 @@ function resolveCook(character) {
   if (tier === "secondary") {
     return `${character.name} kept the fire going and did a fair job of it — ${rationsProduced} rations set aside (${detail}).`;
   }
+  if (tier === "poor") {
+    return `${character.name} made a poor hand of the cooking — most of it burned or went wrong, only ${rationsProduced} rations salvaged (${detail}).`;
+  }
   return `${character.name} tended the fire, though some of it scorched or went to waste — ${rationsProduced} rations set aside (${detail}).`;
 }
 
@@ -1433,9 +1549,12 @@ function resolveCook(character) {
 // watcher reads as more competent even on a quiet day.
 function resolvePerimeterWatch(character) {
   character.position = "perimeter";
-  const tier = getSkillTier(character, "Perimeter Watch");
+  const tier = getSkillTier(character, "Keep ward");
   if (tier === "primary") {
     return `${character.name} kept a soldier's watch at the perimeter, eyes on the treeline. No trouble today.`;
+  }
+  if (tier === "poor") {
+    return `${character.name} stood watch but spent half of it half-asleep at his post. No trouble today — fortunately.`;
   }
   return `${character.name} stood watch at the perimeter. No trouble today.`;
 }
@@ -1447,7 +1566,7 @@ function resolvePerimeterWatch(character) {
 // Gatherer present — per the locked weight model, Forage should not
 // be reliable without one. See design-rationale.md.
 function resolveForage(character) {
-  const tier = getSkillTier(character, "Forage");
+  const tier = getSkillTier(character, "Gather mast");
   const roll = Math.random();
   const treeFindChance = 0.25;
 
@@ -1458,9 +1577,10 @@ function resolveForage(character) {
   }
 
   const ranges = {
-    primary: [3, 6],
+    primary:   [3, 6],
     secondary: [1, 3],
-    base: [0, 1]
+    base:      [0, 1],
+    poor:      [0, 0]   // almost certainly comes back empty
   };
   const [min, max] = rangeForTier(tier, ranges);
   const foundFood = rollYield(min, max);
@@ -1583,18 +1703,18 @@ function resolveScoutForEnemiesForDay(scoutingCharacters) {
 }
 
 // Routes a character to the correct resolver based on their task.
-// Note: "Scout" is deliberately NOT routed through here —
+// Note: "Spy out" is deliberately NOT routed through here —
 // it's resolved once per day for all scouts at once, from runDay(),
 // since the Veneur+Man-at-Arms combo needs to see the full day's assignments.
-function resolveCharacterTask(character) {
-  switch (character.currentTask) {
+function resolveCharacterAction(character) {
+  switch (character.currentAction) {
     case "Build Palisade": return resolveBuildPalisade(character);
-    case "Hunt": return resolveHunt(character);
-    case "Cook": return resolveCook(character);
-    case "Perimeter Watch": return resolvePerimeterWatch(character);
-    case "Woodcutting": return resolveWoodcutting(character);
-    case "Forage": return resolveForage(character);
-    case "Scout": return null; // handled separately, see resolveScoutForEnemiesForDay
+    case "Stalk beasts": return resolveHunt(character);
+    case "Cook provisions": return resolveCook(character);
+    case "Keep ward": return resolvePerimeterWatch(character);
+    case "Fell timber": return resolveWoodcutting(character);
+    case "Gather mast": return resolveForage(character);
+    case "Spy out": return null; // handled separately, see resolveScoutForEnemiesForDay
     default: return `${character.name} had no task and did nothing today.`;
   }
 }
@@ -1688,7 +1808,7 @@ function hungerStage(character) {
 // grants the bigger fight-back number specifically.
 function watchPresent() {
   return gameState.characters.some(
-    c => c.alive && c.currentTask === "Perimeter Watch"
+    c => c.alive && c.currentAction === "Keep ward"
   );
 }
 
@@ -1696,8 +1816,8 @@ function watchPresent() {
 // distinct from watchPresent() above.
 function soldierOnWatch() {
   return gameState.characters.some(
-    c => c.alive && c.currentTask === "Perimeter Watch"
-      && getSkillTier(c, "Perimeter Watch") === "primary"
+    c => c.alive && c.currentAction === "Keep ward"
+      && getSkillTier(c, "Keep ward") === "primary"
   );
 }
 
@@ -1744,7 +1864,7 @@ function resolveFightBack(outriderCount, anyWatcher, soldierWatching) {
 //     movement better — same skill that makes his Scout read tighter)
 //     than being called back by a non-Man-at-Arms watcher.
 function baseHitChance(character, watcherPresent, outridersRemaining, originalCount, soldierWatching) {
-  const onWatch = character.currentTask === "Perimeter Watch";
+  const onWatch = character.currentAction === "Keep ward";
   const pressureRatio = outridersRemaining / originalCount; // fewer attackers left = less danger
 
   let chance;
@@ -1840,7 +1960,7 @@ function resolveResourceRisk(anyWatcher) {
 // unwatched-but-in-camp hit chance instead of full open-ground risk.
 // Perimeter Watch itself is not in this list — the watcher is the one
 // person who's already braced, not someone who needs warning.
-const OUTDOOR_TASKS = ["Hunt", "Forage", "Scout", "Woodcutting"];
+const OUTDOOR_ACTIONS = ["Stalk beasts", "Gather mast", "Spy out", "Fell timber"];
 
 // Resolves the scout wave: outriders arrive, the vanguard fights
 // back if armed, casualties and resource losses are applied, and
@@ -1890,7 +2010,7 @@ function resolveScoutWave() {
   gameState.characters
     .filter(c => c.alive)
     .forEach(character => {
-      const isOutdoors = OUTDOOR_TASKS.includes(character.currentTask);
+      const isOutdoors = OUTDOOR_ACTIONS.includes(character.currentAction);
       // Warned: was outside camp, but a manned Watch (any watcher)
       // called them back before the raid landed. They still face
       // some risk — running back in the dark isn't free — but they
@@ -1949,13 +2069,13 @@ function runDay() {
   const entries = [];
 
   const scoutingCharacters = gameState.characters.filter(
-    c => c.alive && c.currentTask === "Scout"
+    c => c.alive && c.currentAction === "Spy out"
   );
 
   gameState.characters
-    .filter(c => c.alive && c.currentTask !== "Scout")
+    .filter(c => c.alive && c.currentAction !== "Spy out")
     .forEach(character => {
-      entries.push(resolveCharacterTask(character));
+      entries.push(resolveCharacterAction(character));
     });
 
   entries.push(...resolveScoutForEnemiesForDay(scoutingCharacters));
@@ -2073,7 +2193,7 @@ function renderLog() {
 // reassign for the next day. Keeps assignment deliberate
 // rather than carrying over automatically.
 function clearAllTasks() {
-  gameState.characters.filter(c => c.alive).forEach(c => c.currentTask = null);
+  gameState.characters.filter(c => c.alive).forEach(c => c.currentAction = null);
 }
 
 // Called when the player clicks Start Day. Runs the simulation,
