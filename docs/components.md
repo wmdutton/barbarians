@@ -1,17 +1,26 @@
 # Barbarians — Components
-*Implementation specs for all UI components. Build reference — what and how, not why. Last verified against: v0.5.0.0.*
+*Implementation specs for all UI components. Build reference — what and how, not why. Last verified against: v0.5.1.0.*
 
 *For design rationale see `barbarians-ui-decisions-20260726.md`. For token values see `barbarians-tokens-20260726.md`.*
 
+## Implementation Notes (v0.5.1.0)
+
+- **Action Tray (§4) is built.** Bottom sheet slides up from `translateY(100%)`. Shared single instance — context-switches on slot tap without closing. Scrim replaced with document-level click listener so character slots remain tappable while tray is open. Tapping the same open slot closes.
+- **Flavor text hints are embedded in the flavor paragraph**, not a separate element. `HINT_POOL` in `index.html` holds role/tier-keyed sentences written as character observation. Sentences are picked once at `createSettler` time (`practicedSentence`, `poorSentence` on the character object) and read at render time — never re-rolled on re-render.
+- **Actions persist across days.** `clearAllTasks()` removed. Characters carry their last assignment until the player changes it via the tray.
+- **Game screen layout:** Status bar + resource strip wrapped in `#gameHeader` with `position: sticky; top: 0`. Start Day button `position: fixed; bottom: 0`. `#gameScreen` has `padding-bottom: 56px` to clear the button. `body` background switches to parchment when game screen is active via `body:has()`.
+- **Status bar:** "Barbarians" title + interpunct separator + day counter grouped in `.sb-left` flex cluster left. Threat word centered. Version tag right.
+- **Selection screen:** Selected-state dot indicator removed. Box-shadow on selected card removed (border only).
+
 ---
 
-## Screen Layout
+
 
 Three full-screen states. Only one is ever visible at a time.
 
 | Screen | Stack order (top → bottom) |
 |---|---|
-| **Selection Screen** | Header block → Button row → Character cards (2-col grid, scrollable) |
+| **Selection Screen** | Character cards (2-col grid, scrollable) |
 | **Game Screen** | Status Bar → Resource Strip → Site Card → Character Cards (scrollable) → Start Day Button |
 | **Journal Screen** | Day Header → Rule → Journal Entry → Return Touch |
 
@@ -21,66 +30,20 @@ Transition Game → Journal: fade to black (300ms), Journal fades in (300ms). No
 
 ## 1. Character Card — Selection Screen
 
-**Layout:** Vertical. Full-figure portrait top, card body below. Two-column grid, single-column on mobile.
+**Layout:** Vertical. Full-figure portrait top, card body below. Two-column grid on screen, scrollable.
 
-### Portrait Zone
-
-```
-height: --portrait-height-full (170px)
-background: --color-card-portrait-bg
-object-fit: cover, object-position: center top
-```
-
-**Portrait placeholder** — shown when no portrait image is assigned. Inline SVG: generic standing figure silhouette, 72×72px, `opacity: 0.28`, centered in zone. Defined as `SILHOUETTE_SVG` constant in JS; rendered via `portraitZoneHTML(src)` helper. To add a real portrait: set `candidate.portraitSrc = "path/to/file.png"` — the helper renders an `<img>` automatically.
-
-**Fade overlay** — absolutely positioned `div.candidate-portrait-fade` at bottom of portrait zone. Height `--portrait-fade-height` (80px). Background `--portrait-fade`. Bleeds portrait into card body.
-
-### Card Body
-
-| Zone | Element | Spec |
+| Zone | Content | Spec |
 |---|---|---|
-| Name | `p.cand-name` | Spectral SC 11px 700. `--color-ink-primary`. `--tracking-wide`. |
-| Role | `p.cand-role` | Spectral SC 8px 400 uppercase. `--color-ink-role`. `--tracking-wider`. |
-| Divider | `hr.cand-divider` | 1px, `--divider-ink`. Margin 4px top/bottom. |
-| Flavor text | `p.cand-flavor` | Spectral italic 9.5px. `--color-ink-secondary`. Line-height `--leading-base`. |
-| Tier hints | `p.cand-hints` | Spectral italic 9px. `--color-ink-muted`. One sentence each for Practiced and Poor hints. |
-| Supplies | `p.cand-supplies` | Spectral SC 8px uppercase. `--color-supplies-parchment`. No label prefix — contents only ("4 rations"). |
+| Portrait Zone | Full-figure portrait | 170px height. `object-fit: cover`. No visible placeholder. Fade gradient bottom 80px → parchment (`--portrait-fade`). |
+| Name Row | Character name | Spectral SC 12px 700. |
+| Role Line | Role label | Spectral SC 9px 400 uppercase. `#7a5c2e`. |
+| Divider | Ornamental rule | 1px gradient (`--divider-ink`). |
+| Flavor Block | Flavor text | Spectral italic 10.5px. Scrollable — no truncation. |
+| Supplies Line | Resource contents | Spectral SC 9px uppercase. `#5a7a4a`. No label prefix — contents only ("5 rations · salt"). |
 
-### Card States
-
-| State | Border | Background | Extra |
-|---|---|---|---|
-| Default | `--card-border-well` | `--color-card-bg` | — |
-| Selected | `--card-border-selected` | `--color-card-bg` | `--card-shadow-selected` + filled dot 8px, `--color-selected`, top-right corner (absolute, 10px in) |
-
-### Selection Screen Header
-
-Sits above the button row and card grid. Max-width 680px, centered.
-
-```
-.sel-header padding: 28px 16px 16px
-```
-
-| Element | Spec |
-|---|---|
-| Title `p.sel-title` | Spectral SC 38px 700. `--color-ink-primary`. Letter-spacing 0.06em. |
-| Rule `hr.sel-rule` | 1px, `--divider-ink`. Max-width 220px, centered. Margin-bottom 10px. |
-| Instructions `#selectionInstructions` | Spectral italic 13px. `--color-ink-muted`. Updates live: "Choose 5 men — N of 5 selected." |
-
-**Version tag** `p.sel-version` — `position: absolute`, top-right (top 14px, right 18px). 7px, `--color-ink-ornament`, opacity 0.6. Visible but not part of the composition.
-
-### Button Row `.sel-actions`
-
-Sits between header and card grid. Max-width 680px, centered, `justify-content: center`. Margin: 10px auto 24px.
-
-| Button | Class | Label logic |
-|---|---|---|
-| Reroll | `.sel-btn.sel-btn-secondary` | "Reroll Characters" on load; "N Rerolls Remaining" / "1 Reroll Remaining" after first use. Disabled at 0 rerolls. |
-| Confirm | `.sel-btn.sel-btn-primary` | "Confirm Vanguard". Disabled until exactly 5 selected. |
-
-Button shared spec: Spectral SC 9px, `--tracking-widest`, uppercase, padding 11px 20px, border-radius 8px.
-- Secondary: transparent bg, `1.5px solid --color-parchment-deep`, `--color-ink-muted` text.
-- Primary: transparent bg, `1.5px solid --color-selected`, `--color-selected` text. Hover: `rgba(139,58,47,0.06)` bg.
+**States:**
+- Default: `1px solid #c8b89a` border, `#f5ede0` background
+- Selected: `1px solid #8b3a2f` border + `0 0 0 1px #8b3a2f33` shadow + small filled dot indicator top-right corner
 
 ---
 
@@ -156,9 +119,9 @@ Bottom sheet. Slides up from bottom of screen on action slot tap.
 
 **Dismiss and context-switching:**
 - Tap outside → closes, no change
-- Tap a different character's slot → stays open, context switches
+- Tap a different character's slot → stays open, context switches (header + selected state update)
 - Tap same assigned slot that opened tray → closes, no change
-- Auto-closes after each assignment
+- Auto-closes after each assignment — action pins to character's slot immediately
 
 ---
 
@@ -181,8 +144,11 @@ Separated from Resource Strip below by 1px gradient ink rule.
 Sits below Status Bar, above Site Card. Scrolls horizontally.
 
 **Collapsed (default):** Icon + number overlaid center. Tap to expand.
+
 **Expanded:** Labels appear below each icon (Spectral SC 6.5px uppercase).
-**Number:** Lining-figure font. 11px 700. Centered over icon. `text-shadow: --resource-count-shadow`. `font-variant-numeric: lining-nums tabular-nums`.
+
+**Number:** Lining-figure font (TBD — not Georgia). 11px 700. Centered over icon. `text-shadow: 0 0 4px #eee5d2, 0 0 2px #eee5d2`. `font-variant-numeric: lining-nums tabular-nums`.
+
 **Icon size:** 28×28px. Journal-sketch aesthetic (ChatGPT-generated, pending).
 
 ---
@@ -204,24 +170,32 @@ Sits below Status Bar, above Site Card. Scrolls horizontally.
 
 | State | Display | Behavior |
 |---|---|---|
-| Hidden | Nothing rendered | Not tappable |
+| Hidden | Nothing rendered — no slot, no placeholder | Not tappable |
 | Approximate | Icon only, `opacity: 0.45`, no number | Tappable → Resource Modal with vague flavor |
 | Known | Icon + number centered over icon | Tappable → Resource Modal with concrete flavor |
+
+- Icon sits directly on parchment. No containing box or square.
+- Icon size: `--site-stat-icon-size` (28px).
+- Number: `--font-numeric`, 11px 700, centered over icon. `text-shadow: --resource-count-shadow-card`.
+- Label below icon: Spectral SC 7px uppercase `--color-ink-muted`. Shown when stat is approximate or known.
+- Stats row scrolls horizontally as additional stats reveal. No scroll indicator shown.
 
 ---
 
 ## 8. Site Modal
 
-Triggered by tapping the Site Card art zone. Covers game screen with dark scrim. Tap anywhere to dismiss.
+Triggered by tapping the Site Card art zone. Covers game screen with dark scrim. Tapping anywhere dismisses.
 
-| Zone | Spec |
-|---|---|
-| Scrim | `background: --modal-scrim`. Full screen. |
-| Modal box | `--color-card-bg` bg. `--card-border-well`. `border-radius: --modal-radius`. `padding: --modal-padding`. Width `--modal-width`. |
-| Title | Spectral SC 13px 600. `--color-ink-primary`. Uppercase. `--tracking-wider`. Centered. |
-| Rule | 1px `--divider-ink`. |
-| Body | Spectral italic 13px. `--color-ink-secondary`. `line-height: --leading-base`. Centered. |
-| Dismiss | Spectral SC 9px. `--color-ink-muted`. Uppercase. `--tracking-widest`. Centered. |
+| Zone | Content | Spec |
+|---|---|---|
+| Scrim | Dark overlay | `background: --modal-scrim`. Covers full screen. Entire surface tappable to dismiss. |
+| Modal box | Parchment card, centered | `--color-card-bg` bg. `--card-border-well` border. `border-radius: --modal-radius`. `padding: --modal-padding`. Width `--modal-width`. |
+| Title | Stage name | Spectral SC 13px 600. `--color-ink-primary`. Uppercase. Letter-spacing `--tracking-wider`. Centered. |
+| Rule | Ink divider | 1px, `--divider-ink`. Full modal width. |
+| Body | Stage flavor / progress description | Spectral italic 13px. `--color-ink-secondary`. `line-height: --leading-base`. Centered. |
+| Dismiss | "Tap to return" | Spectral SC 9px. `--color-ink-muted`. Uppercase. Letter-spacing `--tracking-widest`. Centered. |
+
+No close button. No icon.
 
 ---
 
@@ -229,25 +203,30 @@ Triggered by tapping the Site Card art zone. Covers game screen with dark scrim.
 
 Triggered by tapping an approximate or known stat icon on the Site Card. Same scrim/dismiss behavior as Site Modal.
 
-| Zone | Spec |
-|---|---|
-| Icon | `--modal-icon-size` (36px). Centered. No box. |
-| Title | Same as Site Modal title spec. |
-| Body | Spectral italic 13px. `--color-ink-secondary`. Centered. Vague or concrete per stat state. |
-| Dismiss | Same as Site Modal. |
+| Zone | Content | Spec |
+|---|---|---|
+| Scrim | Dark overlay | Same as Site Modal. |
+| Modal box | Parchment card, centered | Same container spec as Site Modal. |
+| Icon | Resource icon, large | `--modal-icon-size` (36px). Centered. No box. |
+| Title | Resource name | Same as Site Modal title spec. |
+| Rule | Ink divider | Same. |
+| Body | Resource flavor text — vague or concrete per stat state | Spectral italic 13px. `--color-ink-secondary`. `line-height: --leading-base`. Centered. |
+| Dismiss | "Tap to return" | Same. |
+
+Flavor text varies by stat state: approximate → character-voiced vague read ("the slopes above camp hold good standing oak — how much, none can yet say"); known → concrete count read ("forty-seven trees still standing within felling distance of camp").
 
 ---
 
 ## 10. Start Day Button — Game Screen
 
-Pinned to bottom. Full width. Ink rule above.
+Pinned to bottom. Full width. Ink rule above: `linear-gradient(to right, transparent, #c8b89a, transparent)`, 1px, margin-bottom 7px.
 
 | State | Border | Text color | Tappable |
 |---|---|---|---|
-| Enabled | `1.5px solid #8b3a2f` | `#8b3a2f` | Yes |
-| Disabled | `1.5px solid #c8b89a` | `#c8b89a` | No |
+| Enabled (all assigned) | `1.5px solid #8b3a2f` | `#8b3a2f` | Yes |
+| Disabled (any unassigned) | `1.5px solid #c8b89a` | `#c8b89a` | No |
 
-Background always `#eee5d2`. Spectral SC 9px uppercase `--tracking-widest`. Border-radius 8px. Label: "Begin the Day".
+Background always `#eee5d2`. Spectral SC 9px uppercase letter-spacing 0.2em. Border-radius 8px. Label: "Begin the Day".
 
 ---
 
@@ -258,9 +237,9 @@ Background `#110d08`.
 | Zone | Spec |
 |---|---|
 | Day Header | Spectral SC 22px 600 `#c8902a`. Left-aligned. e.g. "Day Four" |
-| Rule | 1px gradient `#7a4a18` → transparent. |
+| Rule | 1px gradient `#7a4a18` → transparent. Minimal gap below header. |
 | Journal Entry | Spectral italic 16px `#d4b87a`. Character names in `#e8c890`. Single paragraph. |
-| Return Touch | Spectral SC ~12px `#5a3e1a` centered. Whole screen tappable. Label "Dawn". |
+| Return Touch | Spectral SC ~12px `#5a3e1a` centered. Label only — whole screen is tappable. "Dawn" |
 
 ---
 
@@ -268,15 +247,16 @@ Background `#110d08`.
 
 | Crop | Usage | Display size | Notes |
 |---|---|---|---|
-| Full figure | Selection screen | ~full card width × 170px | `object-fit: cover`, `object-position: center top` |
+| Full figure | Selection screen, expanded game card | ~220px wide × 170px tall | `object-fit: cover`, centered |
 | Face crop | Collapsed game card | 46×46px | `object-fit: cover`, centered on face |
 
 - Git paths only — never base64 inlined
 - Trim ~14–15% transparent canvas margin with PIL bounding-box before committing (`extract_assets.py`)
-- Set `candidate.portraitSrc = "path"` to attach a portrait; `portraitZoneHTML()` renders it automatically. No src → silhouette placeholder.
 
 ---
 
 ## Deprecated
+
+*Components moved here when replaced or removed. Kept for reference during build.*
 
 *(none yet)*

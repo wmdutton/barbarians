@@ -1,5 +1,6 @@
 # Barbarians — Design Tokens
-*CSS custom properties for index.html. Last verified against: v0.5.0.0.*
+*CSS custom properties for index.html. Last verified against: v0.5.1.0.*
+*Parchment tokens are the active system for selection and game screens. Legacy dark tokens are retained for the Journal Screen only (`--color-journal-*`). Dark theme tokens for the old game screen (backgrounds, borders, status colors) remain in `:root` but are no longer used by any active component — candidates for removal once the journal screen's own token set is confirmed stable.*
 
 ---
 
@@ -7,15 +8,9 @@
 
 All tokens declared in `:root`. Reference as `var(--token-name)` throughout CSS.
 
-Two token layers co-exist in `:root`:
-- **Parchment system** — Selection Screen and all future parchment surfaces. The target visual language.
-- **Legacy dark system** — Game Screen only. Will be migrated to parchment in a future pass.
-
 ---
 
-## Parchment System Tokens
-
-### Color
+## Color Tokens
 
 ```css
 :root {
@@ -37,11 +32,11 @@ Two token layers co-exist in `:root`:
 
   /* Accent — selected / danger / primary action */
   --color-selected:         #8b3a2f;
-  --color-selected-glow:    rgba(139,58,47,0.2);
+  --color-selected-glow:    #8b3a2f33;
 
   /* Status */
   --color-threat:           #8b4a2f;
-  --color-supplies-parchment: #5a7a4a;  /* supplies line on parchment cards */
+  --color-supplies:         #5a7a4a;
 
   /* Character decay arc — card backgrounds */
   --color-card-hungry-bg:   #ddd8cc;
@@ -63,6 +58,21 @@ Two token layers co-exist in `:root`:
   --color-slot-assigned-bg: rgba(138,106,58,0.13);
   --color-slot-empty-bg:    #e8dbc6;
 
+  /* Character decay arc — card backgrounds */
+  --color-card-hungry-bg:   #ddd8cc;
+  --color-card-starving-bg: #c4beb4;
+  --color-card-dead-bg:     #c0bcb4;
+
+  /* Character decay arc — card borders */
+  --color-card-hungry-border:   #9a9080;
+  --color-card-starving-border: #706860;
+  --color-card-dead-border:     #888880;
+
+  /* Character decay arc — state word colors */
+  --color-state-hungry:   #7a6848;
+  --color-state-starving: #4a3e30;
+  --color-state-dead:     #555555;
+
   /* Journal screen — warm dark */
   --color-journal-bg:       #110d08;
   --color-journal-header:   #c8902a;
@@ -78,39 +88,45 @@ Two token layers co-exist in `:root`:
 }
 ```
 
-### CSS Filters — Character Decay Arc
+---
+
+## CSS Filters — Character Decay Arc
 
 Applied to the entire `.char-card` element. Do not apply to individual child elements.
 
 ```css
-.char-card.hungry   { filter: saturate(0.55) brightness(0.95); }
+.char-card.hungry  { filter: saturate(0.55) brightness(0.95); }
 .char-card.starving { filter: saturate(0.2) brightness(0.88); }
-.char-card.dead     { filter: grayscale(1) brightness(0.85); opacity: 0.5; }
+.char-card.dead    { filter: grayscale(1) brightness(0.85); opacity: 0.5; }
 ```
 
 *SVG roughen filter for ash/char border effect: designed, parked. Reintroduce as polish pass once core loop is built.*
 
-### Typography
+---
+
+## Typography Tokens
 
 ```css
 :root {
-  --font-display:  'Spectral SC', Georgia, serif;   /* headings, labels, buttons */
-  --font-body-new: 'Spectral', Georgia, serif;       /* flavor text, italic passages */
-  --font-numeric:  'Trebuchet MS', Arial, sans-serif; /* resource counts — lining figures */
+  --font-display:   'Spectral SC', Georgia, serif;
+  --font-body:      'Spectral', Georgia, serif;
+  /* Resource counts: lining-figure font TBD — Georgia rejected (oldstyle figures).
+     Interim: system sans with font-variant-numeric: lining-nums tabular-nums */
+  --font-numeric:   'Trebuchet MS', 'Arial', sans-serif;
 
   /* Sizes */
-  --text-xs:   8px;    /* state word, resource label, role line, version tag */
-  --text-sm:   9px;    /* buttons, misc meta */
-  --text-base: 9.5px;  /* flavor text (game card) */
-  --text-md:   11px;   /* character name (game card), resource count */
-  --text-lg:   13px;   /* threat word, selection screen instructions */
-  --text-xl:   16px;   /* journal entry */
-  --text-2xl:  22px;   /* journal day header */
+  --text-xs:        8px;    /* state word, resource label, role line */
+  --text-sm:        9px;    /* start day button, misc meta */
+  --text-base:      9.5px;  /* flavor text (game card) */
+  --text-md:        11px;   /* character name (game card), resource count */
+  --text-lg:        13px;   /* threat word */
+  --text-xl:        16px;   /* journal entry */
+  --text-2xl:       22px;   /* journal day header */
 
   /* Leading */
-  --leading-tight: 1.2;
-  --leading-base:  1.65;
-  --leading-loose: 1.9;
+  --leading-tight:  1.2;
+  --leading-base:   1.65;
+  --leading-loose:  1.9;
 
   /* Tracking */
   --tracking-wide:   0.1em;
@@ -119,12 +135,9 @@ Applied to the entire `.char-card` element. Do not apply to individual child ele
 }
 ```
 
-**Font load:** Google Fonts — add to `<head>` or `@import` at top of `<style>`:
-```
-https://fonts.googleapis.com/css2?family=Spectral+SC:wght@400;600;700&family=Spectral:ital,wght@0,400;0,700;1,400;1,700&display=swap
-```
+---
 
-### Spacing & Layout
+## Spacing & Layout Tokens
 
 ```css
 :root {
@@ -132,14 +145,14 @@ https://fonts.googleapis.com/css2?family=Spectral+SC:wght@400;600;700&family=Spe
   --card-radius:          10px;
   --card-border-well:     1px solid var(--color-card-well-border);
   --card-border-selected: 1px solid var(--color-selected);
-  --card-shadow-selected: 0 0 0 2px rgba(139,58,47,0.2);
+  --card-shadow-selected: 0 0 0 1px var(--color-selected-glow);
   --card-padding:         12px;
   --card-height-collapsed: 46px;
 
   /* Portrait zones */
-  --portrait-height-full:      170px;  /* selection screen full-figure */
-  --portrait-height-selection: 120px;  /* reserved, not currently used */
-  --portrait-face-size:        46px;   /* game screen collapsed card face crop */
+  --portrait-height-full:      170px;
+  --portrait-height-selection: 120px;
+  --portrait-face-size:        46px;   /* game screen collapsed card */
   --portrait-fade-height:      80px;
 
   /* Action slot / right column */
@@ -152,14 +165,14 @@ https://fonts.googleapis.com/css2?family=Spectral+SC:wght@400;600;700&family=Spe
   --resource-icon-size: 28px;
 
   /* Start Day button */
-  --btn-start-radius: 8px;
-  --btn-start-border: 1.5px solid var(--color-selected);
+  --btn-start-radius:  8px;
+  --btn-start-border:  1.5px solid var(--color-selected);
 
   /* Layout gaps */
-  --gap-xs: 4px;
-  --gap-sm: 8px;
-  --gap-md: 12px;
-  --gap-lg: 16px;
+  --gap-xs:   4px;
+  --gap-sm:   8px;
+  --gap-md:   12px;
+  --gap-lg:   16px;
 
   /* Site card */
   --site-art-height:     110px;
@@ -170,27 +183,41 @@ https://fonts.googleapis.com/css2?family=Spectral+SC:wght@400;600;700&family=Spe
   --modal-width:   290px;
   --modal-scrim:   rgba(17,13,8,0.6);
   --modal-padding: 22px 20px 18px;
-  --modal-icon-size: 36px;
+  --modal-icon-size: 36px;   /* resource modal only */
 }
 ```
 
-### Component Shorthands
+---
+
+## Component Shorthands
 
 ```css
-/* Ink rule divider — 1px-height element */
---divider-ink: linear-gradient(to right, transparent, rgba(200,184,154,0.7), transparent);
+/* Ink rule divider — paste as background on a 1px-height div */
+--divider-ink: linear-gradient(
+  to right,
+  transparent,
+  rgba(200,184,154,0.7),
+  transparent
+);
 
-/* Portrait fade — overlay div at bottom of portrait zone (selection screen) */
---portrait-fade: linear-gradient(to bottom, rgba(238,229,210,0) 0%, rgba(238,229,210,0.6) 50%, #eee5d2 88%);
+/* Portrait fade — paste as background on fade overlay div (selection screen) */
+--portrait-fade: linear-gradient(
+  to bottom,
+  rgba(238,229,210,0) 0%,
+  rgba(238,229,210,0.6) 50%,
+  #eee5d2 88%
+);
 
-/* Resource count text-shadow — over page parchment (#eee5d2) */
+/* Resource count text-shadow — makes number legible over page parchment (#eee5d2) */
 --resource-count-shadow: 0 0 4px #eee5d2, 0 0 2px #eee5d2;
 
-/* Resource count text-shadow — over card-bg surface (#f5ede0) */
+/* Resource count text-shadow — on card-bg surface (#f5ede0), e.g. site card stats row */
 --resource-count-shadow-card: 0 0 4px #f5ede0, 0 0 2px #f5ede0;
 ```
 
-### Transitions
+---
+
+## Transition Tokens
 
 ```css
 :root {
@@ -202,56 +229,10 @@ https://fonts.googleapis.com/css2?family=Spectral+SC:wght@400;600;700&family=Spe
 
 ---
 
-## Legacy Dark System Tokens (Game Screen only)
-
-These cover the game screen, which has not yet been migrated to the parchment system. Do not use for new surfaces — use parchment tokens instead.
-
-```css
-:root {
-  --color-bg-page:   #1b1b1b;
-  --color-bg-panel:  #262626;
-  --color-bg-log-entry: #202020;
-  --color-bg-candidate-selected: #33301f;
-
-  --color-text-primary:  #e8e0d0;
-  --color-text-muted:    #bdbdbd;
-  --color-text-disabled: #999;
-  --color-text-footer:   #666;
-
-  --color-accent-gold:       #8a6d3b;
-  --color-accent-gold-light: #c9a86a;
-  --color-accent-gold-muted: #8a7a54;
-
-  --color-border-default: #555;
-  --color-border-subtle:  #333;
-
-  --color-status-hungry-bg:    #6b5a1f;
-  --color-status-hungry-text:  #e6d6a6;
-  --color-status-starving-bg:  #6b2f1f;
-  --color-status-starving-text: #e6b6a6;
-  --color-status-deceased:     #6b1f1f;
-  --color-status-deceased-text: #a05050;
-
-  --color-victory-bg:     #2f4a2f;
-  --color-victory-text:   #b6e6b6;
-  --color-victory-border: #5a8a5a;
-  --color-defeat-bg:      #4a2f2f;
-  --color-defeat-text:    #e6b6b6;
-  --color-defeat-border:  #8a5a5a;
-
-  --color-supplies-text: #7a9e7a;
-
-  --font-body: Georgia, serif;  /* legacy game screen only */
-}
-```
-
----
-
 ## Deprecated
 
-- `--color-hunger: #8a4a1a` — retired. Hunger state uses card-level CSS decay filters.
-- `--portrait-height-game: 150px` — retired. Game screen portrait is 46px square face crop.
-- `--card-shadow: 1px 2px 6px rgba(30,20,10,0.22)` — retired. Cards use border only.
+- `--color-hunger: #8a4a1a` — retired. Hunger state now expressed via card-level CSS decay filters, not inline text color.
+- `--portrait-height-game: 150px` — retired. Game screen portrait is 46px square face crop, not a tall zone.
+- `--card-shadow: 1px 2px 6px rgba(30,20,10,0.22)` — retired. Cards use border only; drop shadow removed for naturalism.
 - `--card-border: 1px solid var(--color-parchment-deep)` — replaced by `--card-border-well` and per-state border tokens.
-- `--color-supplies: #5a7a4a` — replaced by `--color-supplies-parchment` (same value, renamed for token-system clarity).
-- `--card-shadow-selected: 0 0 0 1px var(--color-selected-glow)` — updated to `0 0 0 2px rgba(139,58,47,0.2)` (explicit value, wider spread).
+- `--card-shadow-selected: 0 0 0 2px rgba(139,58,47,0.2)` — retired (v0.5.1.0). Selection screen selected state is border-only; glow shadow removed.

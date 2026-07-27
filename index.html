@@ -1,8 +1,8 @@
 <!--
   Barbarians — Prototype
-  Version: 0.5.0.0
+  Version: 0.5.1.0
   Author: Mason Dutton
-  Last updated: 2026-07-26
+  Last updated: 2026-07-27
 
   Full changelog is kept separately (not in this file); see
   barbarians-changelog.md, attached to the project.
@@ -150,7 +150,64 @@
     --portrait-fade: linear-gradient(to bottom, rgba(238,229,210,0) 0%, rgba(238,229,210,0.6) 50%, #eee5d2 88%);
 
     /* Transitions */
-    --transition-card: 150ms ease;
+    --transition-card:   150ms ease;
+    --transition-screen: 300ms ease-in-out;
+    --transition-tray:   200ms ease-out;
+
+    /* Card geometry — game screen */
+    --card-height-collapsed: 46px;
+    --card-right-width:   48px;
+    --action-slot-size:   32px;
+    --action-slot-radius: 6px;
+    --action-slot-empty-shadow: inset 1px 2px 4px rgba(50,20,5,0.09);
+
+    /* Action slot backgrounds */
+    --color-slot-assigned-bg: rgba(138,106,58,0.13);
+    --color-slot-empty-bg:    #e8dbc6;
+
+    /* Character decay arc — card backgrounds */
+    --color-card-hungry-bg:   #ddd8cc;
+    --color-card-starving-bg: #c4beb4;
+    --color-card-dead-bg:     #c0bcb4;
+
+    /* Character decay arc — card borders */
+    --color-card-hungry-border:   #9a9080;
+    --color-card-starving-border: #706860;
+    --color-card-dead-border:     #888880;
+
+    /* Character decay arc — state word colors */
+    --color-state-hungry:   #7a6848;
+    --color-state-starving: #4a3e30;
+    --color-state-dead:     #555555;
+
+    /* Start Day button */
+    --btn-start-radius: 8px;
+    --btn-start-border: 1.5px solid var(--color-selected);
+
+    /* Modals */
+    --modal-radius:   12px;
+    --modal-width:    290px;
+    --modal-scrim:    rgba(17,13,8,0.6);
+    --modal-padding:  22px 20px 18px;
+
+    /* Site card */
+    --site-art-height: 110px;
+
+    /* Resource count text-shadow — on page parchment surface */
+    --resource-count-shadow: 0 0 4px #eee5d2, 0 0 2px #eee5d2;
+    /* Resource count text-shadow — on card-bg surface */
+    --resource-count-shadow-card: 0 0 4px #f5ede0, 0 0 2px #f5ede0;
+
+    /* Journal screen */
+    --color-journal-bg:     #110d08;
+    --color-journal-header: #c8902a;
+    --color-journal-rule:   #7a4a18;
+    --color-journal-body:   #d4b87a;
+    --color-journal-names:  #e8c890;
+    --color-journal-return: #5a3e1a;
+
+    /* Typography — added sizes */
+    --text-2xl: 22px;
   }
 
   * {
@@ -169,99 +226,8 @@
     border-bottom: 1px solid var(--color-border-default);
     padding-bottom: 8px;
   }
-  .character {
-    margin-bottom: 18px;
-    padding: 10px;
-    background: var(--color-bg-panel);
-    border-left: 3px solid var(--color-accent-gold);
-  }
-  .character .name {
-    font-weight: bold;
-    font-size: 1.1em;
-  }
-  .character .skill {
-    color: var(--color-accent-gold-light);
-    font-style: italic;
-  }
-  .character .secondary-skill {
-    color: var(--color-accent-gold-muted);
-    font-style: italic;
-    font-size: 0.8em;
-  }
-  .character .backstory {
-    margin-top: 4px;
-    color: var(--color-text-muted);
-  }
-  .hunger-tag {
-    display: inline-block;
-    margin-top: 4px;
-    padding: 2px 8px;
-    font-size: 0.8em;
-    font-weight: bold;
-    text-transform: uppercase;
-    border-radius: 3px;
-  }
-  .hunger-tag.hungry {
-    background: var(--color-status-hungry-bg);
-    color: var(--color-status-hungry-text);
-  }
-  .hunger-tag.starving {
-    background: var(--color-status-starving-bg);
-    color: var(--color-status-starving-text);
-  }
-  .character.deceased {
-    border-left-color: var(--color-status-deceased);
-    opacity: 0.6;
-  }
-  .character.deceased .name {
-    color: var(--color-status-deceased-text);
-  }
-  .character .task-row {
-    margin-top: 8px;
-  }
-  select {
-    background: var(--color-bg-page);
-    color: var(--color-text-primary);
-    border: 1px solid var(--color-border-default);
-    padding: 8px;
-    font-family: var(--font-body);
-    font-size: 1em;
-    max-width: 100%;
-  }
-  #startDayBtn {
-    margin-top: 10px;
-    padding: 12px 18px;
-    background: var(--color-accent-gold);
-    color: var(--color-bg-page);
-    border: none;
-    font-family: var(--font-body);
-    font-weight: bold;
-    font-size: 1em;
-    cursor: pointer;
-    width: 100%;
-  }
-  #startDayBtn:disabled {
-    background: var(--color-border-default);
-    color: var(--color-text-disabled);
-    cursor: not-allowed;
-  }
-  #assignmentStatus {
-    margin-top: 6px;
-    color: var(--color-accent-gold-light);
-    font-style: italic;
-  }
-  #resourceSummary {
-    margin-bottom: 20px;
-    padding: 10px;
-    background: var(--color-bg-panel);
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px 20px;
-    font-size: 0.95em;
-  }
-  #resourceSummary span {
-    color: var(--color-accent-gold-light);
-  }
+
+
   .game-over {
     margin-bottom: 20px;
     padding: 14px;
@@ -289,24 +255,7 @@
     font-weight: bold;
     cursor: pointer;
   }
-  #dayLog {
-    margin-top: 20px;
-  }
-  .day-entry {
-    margin-bottom: 14px;
-    padding: 10px;
-    background: var(--color-bg-log-entry);
-    border-left: 3px solid var(--color-border-default);
-  }
-  .day-entry .day-title {
-    font-weight: bold;
-    margin-bottom: 6px;
-    color: var(--color-accent-gold-light);
-  }
-  .day-entry ul {
-    margin: 0;
-    padding-left: 20px;
-  }
+
   /* ---------------------------------------------
      SELECTION SCREEN — parchment skin
      Component spec: /docs/components.md §1
@@ -397,20 +346,9 @@
   }
   .candidate.selected {
     border: var(--card-border-selected);
-    box-shadow: var(--card-shadow-selected);
   }
 
-  /* Selected indicator dot — top-right corner, filled circle */
-  .candidate.selected::after {
-    content: '';
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--color-selected);
-  }
+
 
   /* ---- Portrait zone ---- */
   /* Full-figure portrait at top of selection card.
@@ -503,15 +441,7 @@
     margin: 0;
   }
 
-  /* Tier hint line (Practiced / Poor) */
-  .candidate .cand-hints {
-    font-family: var(--font-body-new);
-    font-style: italic;
-    font-size: var(--text-sm);
-    color: var(--color-ink-muted);
-    line-height: var(--leading-base);
-    margin: 0;
-  }
+
 
   /* Supplies line */
   .candidate .cand-supplies {
@@ -577,12 +507,541 @@
     font-family: var(--font-body);
     text-align: center;
   }
-  /* Hide the legacy page-level h1 and version tag while selection is visible —
-     the selection screen has its own title block inside it. */
+  /* Hide the legacy page-level h1 and version tag on both the selection
+     screen and the game screen — neither has use for them. */
   body:has(#selectionScreen:not([style*="display: none"])) > h1,
-  body:has(#selectionScreen:not([style*="display: none"])) > #versionTag {
+  body:has(#selectionScreen:not([style*="display: none"])) > #versionTag,
+  body:has(#gameScreen:not([style*="display: none"])) > h1,
+  body:has(#gameScreen:not([style*="display: none"])) > #versionTag {
     display: none;
   }
+
+  /* Neutralise body margin/padding on the game screen so fixed elements
+     (header, button) sit flush against the viewport edges. */
+  body:has(#gameScreen:not([style*="display: none"])) {
+    background: var(--color-parchment);
+    margin: 0 auto;
+    padding: 0;
+  }
+
+  /* ---------------------------------------------
+     GAME SCREEN — parchment skin
+     Component spec: /docs/components.md §2–11
+     --------------------------------------------- */
+
+  /* Game screen shell — parchment background, needs bottom padding
+     for the fixed Start Day button so content isn't hidden under it. */
+  #gameScreen {
+    background: var(--color-parchment);
+    min-height: 100vh;
+    font-family: var(--font-display);
+    position: relative;
+    padding-bottom: 56px; /* clears the fixed Start Day button */
+  }
+
+  /* ---- Game Header — sticky top (status bar + resource strip) ---- */
+  #gameHeader {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    background: var(--color-parchment);
+  }
+
+  /* ---- Status Bar (§5) ---- */
+  #statusBar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px 8px;
+    gap: var(--gap-sm);
+  }
+  /* Left cluster — title + separator + day */
+  .sb-left {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  #statusBar .sb-title {
+    font-family: var(--font-display);
+    font-size: var(--text-sm);
+    font-weight: 700;
+    color: var(--color-ink-primary);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-wide);
+  }
+  .sb-sep {
+    color: var(--color-ink-ornament);
+    font-size: var(--text-xs);
+    line-height: 1;
+  }
+  #statusBar .sb-day {
+    font-family: var(--font-display);
+    font-size: var(--text-xs);
+    font-weight: 400;
+    color: var(--color-ink-muted);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-wide);
+  }
+  #statusBar .sb-threat {
+    font-family: var(--font-body-new);
+    font-style: italic;
+    font-size: var(--text-lg);
+    color: #8b4a2f;
+    flex: 1;
+    text-align: center;
+  }
+  #statusBar .sb-version {
+    font-family: var(--font-display);
+    font-size: 7px;
+    color: var(--color-ink-ornament);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-wide);
+    opacity: 0.6;
+    flex-shrink: 0;
+  }
+  /* Ink rule below status bar and below resource strip */
+  .game-rule {
+    height: 1px;
+    background: var(--divider-ink);
+    border: none;
+    margin: 0;
+  }
+
+  /* ---- Resource Strip stub (§6) ---- */
+  #resourceStrip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+    padding: 8px 14px 10px;
+    background: var(--color-parchment);
+    font-family: var(--font-display);
+    font-size: var(--text-xs);
+    color: var(--color-ink-muted);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-wide);
+  }
+  #resourceStrip .res-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  #resourceStrip .res-count {
+    font-family: var(--font-numeric);
+    font-size: var(--text-md);
+    font-weight: 700;
+    color: var(--color-ink-primary);
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+
+  /* ---- Site Card stub (§7) ---- */
+  /* Placeholder — fortification images not yet generated.
+     Art zone shows parchment fill + stage name label.
+     Full implementation lands when images are ready. */
+  #siteCard {
+    margin: 10px 14px;
+    background: var(--color-card-bg);
+    border: var(--card-border-well);
+    border-radius: var(--card-radius);
+    overflow: hidden;
+  }
+  .site-art-zone {
+    height: var(--site-art-height);
+    background: var(--color-card-portrait-bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .site-art-label {
+    font-family: var(--font-display);
+    font-size: var(--text-xs);
+    color: var(--color-ink-muted);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-wider);
+    opacity: 0.6;
+  }
+  .site-stage-name {
+    font-family: var(--font-display);
+    font-size: var(--text-xs);
+    color: var(--color-ink-muted);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-wider);
+    padding: 5px 12px;
+  }
+
+  /* ---- Character Cards — Game Screen (§2, §3) ---- */
+  #roster {
+    padding: 0 14px;
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap-sm);
+    margin-top: 10px;
+  }
+
+  /* Base card — collapsed, horizontal layout */
+  .char-card {
+    background: var(--color-card-bg);
+    border: var(--card-border-well);
+    border-radius: var(--card-radius);
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color var(--transition-card), box-shadow var(--transition-card);
+    position: relative;
+  }
+
+  /* Collapsed row — portrait + identity + action slot */
+  .char-card-row {
+    display: flex;
+    align-items: stretch;
+    min-height: var(--card-height-collapsed);
+  }
+
+  /* Face-crop portrait (46×46px) */
+  .char-face {
+    width: 46px;
+    height: 46px;
+    flex-shrink: 0;
+    background: var(--color-card-portrait-bg);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    align-self: center;
+    margin: 0 0 0 0;
+  }
+  .char-face img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center top;
+    display: block;
+  }
+  /* Silhouette fallback in face zone */
+  .char-face .face-placeholder svg {
+    width: 28px;
+    height: 28px;
+    opacity: 0.28;
+  }
+
+  /* Identity block — name / role / state word */
+  .char-identity {
+    flex: 1;
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    min-width: 0; /* prevents overflow from long names */
+  }
+  .char-name {
+    font-family: var(--font-display);
+    font-size: var(--text-md);
+    font-weight: 700;
+    color: var(--color-ink-primary);
+    letter-spacing: var(--tracking-wide);
+    line-height: var(--leading-tight);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .char-role {
+    font-family: var(--font-display);
+    font-size: var(--text-xs);
+    font-weight: 400;
+    color: var(--color-ink-role);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-wider);
+    line-height: var(--leading-tight);
+  }
+  .char-state-word {
+    font-family: var(--font-body-new);
+    font-style: italic;
+    font-size: var(--text-xs);
+    line-height: var(--leading-tight);
+  }
+
+  /* Right column — action slot (48px wide) */
+  .char-action-col {
+    width: var(--card-right-width);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 7px;
+  }
+
+  /* Action slot */
+  .action-slot {
+    width: var(--action-slot-size);
+    height: var(--action-slot-size);
+    border-radius: var(--action-slot-radius);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background var(--transition-card);
+  }
+  .action-slot.empty {
+    background: var(--color-slot-empty-bg);
+    box-shadow: var(--action-slot-empty-shadow);
+  }
+  .action-slot.assigned {
+    background: var(--color-slot-assigned-bg);
+  }
+  /* Placeholder inner square — stands in for the real action icon */
+  .action-slot-icon-placeholder {
+    width: 18px;
+    height: 18px;
+    border-radius: 3px;
+    background: rgba(122,92,46,0.45);
+  }
+  /* Assigned action label inside slot — small text abbreviation */
+  .action-slot-label {
+    font-family: var(--font-display);
+    font-size: 7px;
+    color: var(--color-ink-role);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    text-align: center;
+    line-height: 1.1;
+    padding: 2px;
+  }
+
+  /* Expanded flavor row — slides in below collapsed row */
+  .char-flavor-row {
+    border-top: 1px solid;
+    border-image: var(--divider-ink) 1;
+    padding: 5px 10px 9px 10px;
+    display: none; /* toggled by JS */
+  }
+  .char-card.expanded .char-flavor-row {
+    display: block;
+  }
+  .char-flavor-text {
+    font-family: var(--font-body-new);
+    font-style: italic;
+    font-size: var(--text-base);
+    color: var(--color-ink-secondary);
+    line-height: var(--leading-base);
+    margin: 0;
+  }
+
+
+  /* Hunger/decay state classes — applied to entire .char-card */
+  .char-card.hungry {
+    background: var(--color-card-hungry-bg);
+    border-color: var(--color-card-hungry-border);
+    filter: saturate(0.55) brightness(0.95);
+  }
+  .char-card.starving {
+    background: var(--color-card-starving-bg);
+    border-color: var(--color-card-starving-border);
+    filter: saturate(0.2) brightness(0.88);
+  }
+  .char-card.dead {
+    background: var(--color-card-dead-bg);
+    border-color: var(--color-card-dead-border);
+    filter: grayscale(1) brightness(0.85);
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  /* ---- Action Tray (§4) ---- */
+  /* Fixed bottom sheet — sits above Start Day button when open.
+     Hidden by default; JS adds .tray-open to body when active. */
+  #actionTray {
+    position: fixed;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%) translateY(100%);
+    width: 100%;
+    max-width: 700px;
+    background: var(--color-parchment);
+    border-radius: 14px 14px 0 0;
+    box-shadow: 0 -2px 16px rgba(30,20,5,0.18);
+    transition: transform var(--transition-tray);
+    z-index: 100;
+    padding-bottom: 16px;
+  }
+  #actionTray.open {
+    transform: translateX(-50%) translateY(0);
+  }
+
+  /* Handle bar and top ink rule */
+  .tray-handle-zone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 10px;
+    gap: 6px;
+  }
+  .tray-handle {
+    width: 36px;
+    height: 3px;
+    background: var(--color-parchment-deep);
+    border-radius: 2px;
+    opacity: 0.7;
+  }
+  .tray-ink-rule {
+    width: 100%;
+    height: 1px;
+    background: var(--divider-ink);
+  }
+
+  /* Tray header */
+  .tray-header {
+    font-family: var(--font-display);
+    font-size: var(--text-xs);
+    color: var(--color-ink-muted);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-widest);
+    padding: 8px 16px 4px;
+  }
+
+  /* Action rows */
+  .tray-action-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 8px;
+    border-radius: 8px;
+    margin: 0 8px;
+    cursor: pointer;
+    transition: background 100ms ease;
+  }
+  .tray-action-row:active {
+    background: rgba(200,184,154,0.22);
+  }
+  .tray-action-row.tray-selected .tray-action-name {
+    color: var(--color-accent-slate);
+  }
+
+  /* Icon box — placeholder until real action icons land */
+  .tray-icon-box {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    background: rgba(138,106,58,0.10);
+    border: 1px dashed rgba(122,92,46,0.3); /* dev placeholder border */
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .tray-icon-inner {
+    width: 18px;
+    height: 18px;
+    border-radius: 3px;
+    background: rgba(122,92,46,0.45);
+  }
+
+  /* Action name */
+  .tray-action-name {
+    font-family: var(--font-display);
+    font-size: var(--text-sm);
+    color: var(--color-ink-primary);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-wide);
+  }
+
+  /* Group divider between action groups */
+  .tray-group-rule {
+    height: 1px;
+    background: var(--divider-ink);
+    margin: 4px 8px;
+  }
+
+  /* No scrim — outside-tray taps handled by document listener in JS
+     so character action slots remain tappable while the tray is open. */
+
+  /* ---- Start Day Button — pinned bottom (§10) ---- */
+  #startDayBtn {
+    position: fixed;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    max-width: 700px;
+    padding: 14px 18px;
+    background: var(--color-parchment);
+    border: none;
+    border-top: 1px solid;
+    border-image: linear-gradient(to right, transparent, #c8b89a, transparent) 1;
+    font-family: var(--font-display);
+    font-size: var(--text-sm);
+    font-weight: 400;
+    letter-spacing: var(--tracking-widest);
+    text-transform: uppercase;
+    cursor: pointer;
+    z-index: 50;
+    transition: color 150ms ease;
+  }
+  #startDayBtn:not(:disabled) {
+    color: var(--color-selected);
+  }
+  #startDayBtn:disabled {
+    color: var(--color-ink-ornament);
+    cursor: not-allowed;
+  }
+  #assignmentStatus {
+    display: none; /* replaced by disabled state on button */
+  }
+
+  /* ---- Journal Screen (§11) ---- */
+  #journalScreen {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: var(--color-journal-bg);
+    z-index: 200;
+    padding: 40px 24px 32px;
+    overflow-y: auto;
+    cursor: pointer;
+    box-sizing: border-box;
+    opacity: 0;
+    transition: opacity var(--transition-screen);
+  }
+  #journalScreen.visible {
+    opacity: 1;
+  }
+  .journal-day-header {
+    font-family: var(--font-display);
+    font-size: var(--text-2xl);
+    font-weight: 600;
+    color: var(--color-journal-header);
+    margin: 0 0 6px;
+    letter-spacing: var(--tracking-wide);
+  }
+  .journal-rule {
+    height: 1px;
+    background: linear-gradient(to right, var(--color-journal-rule), transparent);
+    border: none;
+    margin: 0 0 20px;
+  }
+  .journal-entry-text {
+    font-family: var(--font-body-new);
+    font-style: italic;
+    font-size: var(--text-xl);
+    color: var(--color-journal-body);
+    line-height: var(--leading-loose, 1.9);
+    margin: 0 0 32px;
+  }
+  .journal-entry-text .journal-name {
+    color: var(--color-journal-names);
+    font-style: normal;
+  }
+  .journal-return {
+    font-family: var(--font-display);
+    font-size: 12px;
+    color: var(--color-journal-return);
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-widest);
+    margin-top: 16px;
+  }
+
+  /* Color variable for slate blue action name (used in tray) */
+  :root { --color-accent-slate: #4f6470; }
 
   /* ---------------------------------------------
      MOBILE RESPONSIVENESS
@@ -615,32 +1074,20 @@
     }
 
     /* Game screen */
-    #resourceSummary {
-      flex-direction: column;
-      gap: 6px;
+    #roster {
+      padding: 0 8px;
     }
-    select {
-      width: 100%;
+    #siteCard {
+      margin: 8px;
     }
-    .character {
-      padding: 12px;
+    #resourceStrip {
+      padding: 8px;
     }
-    .character .name {
-      font-size: 1.15em;
+    .journal-entry-text {
+      font-size: var(--text-lg);
     }
-    .character .task-row select {
-      width: 100%;
-      margin-top: 6px;
-    }
-    .character .task-row label {
-      display: block;
-      margin-bottom: 2px;
-    }
-    .day-entry {
-      padding: 12px;
-    }
-    .game-over {
-      font-size: 1em;
+    .journal-day-header {
+      font-size: 18px;
     }
   }
 </style>
@@ -648,10 +1095,10 @@
 <body>
 
 <h1>Barbarians</h1>
-<div id="versionTag">v0.5.0.0</div>
+<div id="versionTag">v0.5.1.0</div>
 
 <div id="selectionScreen">
-  <p class="sel-version">v0.5.0.0</p>
+  <p class="sel-version">v0.5.1.0</p>
   <div class="sel-header">
     <p class="sel-title">Barbarians</p>
     <hr class="sel-rule">
@@ -665,12 +1112,60 @@
 </div>
 
 <div id="gameScreen" style="display: none;">
-  <div id="resourceSummary"></div>
+  <!-- Sticky header: title + day counter + resources -->
+  <div id="gameHeader">
+    <div id="statusBar">
+      <div class="sb-left">
+        <span class="sb-title">Barbarians</span>
+        <span class="sb-sep">·</span>
+        <span class="sb-day"></span>
+      </div>
+      <span class="sb-threat"></span>
+      <span class="sb-version">v0.5.1.0</span>
+    </div>
+    <hr class="game-rule">
+    <div id="resourceStrip"></div>
+    <hr class="game-rule">
+  </div>
+
+  <!-- Site Card (stub — images pending art generation) -->
+  <div id="siteCard">
+    <div class="site-art-zone">
+      <span class="site-art-label">Bailey Grounds</span>
+    </div>
+    <hr class="game-rule">
+    <div class="site-stage-name" id="siteStageNameLine"></div>
+  </div>
+
+  <!-- Game Over Banner -->
   <div id="gameOverBanner" style="display: none;"></div>
+
+  <!-- Character Cards -->
   <div id="roster"></div>
-  <button id="startDayBtn" disabled>Start Day</button>
+
+  <!-- Assignment status (hidden — button state communicates this now) -->
   <div id="assignmentStatus"></div>
-  <div id="dayLog"></div>
+
+  <!-- Start Day — fixed to bottom via CSS -->
+  <button id="startDayBtn" disabled>Begin the Day</button>
+</div>
+
+<!-- Action Tray — bottom sheet, shared across all character cards -->
+<div id="actionTray">
+  <div class="tray-handle-zone">
+    <div class="tray-handle"></div>
+    <div class="tray-ink-rule"></div>
+  </div>
+  <div class="tray-header" id="trayHeader">Assign</div>
+  <div id="trayActionList"></div>
+</div>
+
+<!-- Journal Screen — full-screen dark, fires after each day resolves -->
+<div id="journalScreen">
+  <div class="journal-day-header" id="journalDayHeader"></div>
+  <hr class="journal-rule">
+  <div class="journal-entry-text" id="journalEntryText"></div>
+  <div class="journal-return">Dawn</div>
 </div>
 
 <script>
@@ -809,6 +1304,106 @@ const BACKSTORY_POOL = {
     "buried two children before turning twenty and rarely speaks of either."
   ]
 };
+
+// Embedded hint sentences — one per role per tier (Practiced / Poor).
+// Written as character observation in natural prose. These get appended
+// to the flavor paragraph as a second sentence — no separate line,
+// no tier labels, no direct statement of skill level. A careful reader
+// will notice; a skimmer won't. Keyed by role name, then tier.
+const HINT_POOL = {
+  Carpenter: {
+    Practiced: [
+      "He works timber with a confidence that suggests it is not entirely unfamiliar ground.",
+      "He has been around enough construction that the shapes of the work come naturally to him.",
+      "More than once he has watched a frame go up and remembered more than he expected to."
+    ],
+    Poor: [
+      "He has never been good with his hands — careful and willing, but the wood rarely does what he intends.",
+      "Joinery has always defeated him; he can haul and hold, but the finer shaping escapes him.",
+      "Put him near a saw and the results are serviceable, but not much more than that."
+    ]
+  },
+  Veneur: {
+    Practiced: [
+      "He can follow a trail when he needs to, and usually comes back with something to show for it.",
+      "He is no hunter by trade, but he reads the treeline with a patience that occasionally bears fruit.",
+      "He does not claim to hunt, but he has fed himself off the land before and knows roughly how."
+    ],
+    Poor: [
+      "He is loud in the wood — game hears him long before he sees it.",
+      "He has tried his hand at the chase and come back empty more times than he admits.",
+      "Patience in the field is not among his gifts; he startles what he means to stalk."
+    ]
+  },
+  "Master Cook": {
+    Practiced: [
+      "He has kept a fire and managed a pot without disaster more than most men his age.",
+      "He learned enough at his mother's hearth to stretch a meal when nothing better is on hand.",
+      "He can turn raw provisions into something edible, if not always something memorable."
+    ],
+    Poor: [
+      "He has burned more meals than he can count and seems no closer to understanding why.",
+      "He does not belong near a fire with anything that needs to taste like food.",
+      "Cooking is a mystery to him — he can boil water, and little else reliably."
+    ]
+  },
+  "Man-at-Arms": {
+    Practiced: [
+      "He carries himself like a man who has stood his ground before, even if not for a living.",
+      "There is something in the way he watches a perimeter that suggests he has done it before.",
+      "He has been close enough to violence to know what to do when it arrives."
+    ],
+    Poor: [
+      "He is brave enough, but he tenses at the wrong moments — the kind of man who freezes when stillness is needed.",
+      "His nerve has been tested and found wanting; he does not disgrace himself, but he does not hold firm either.",
+      "He is not a fighting man — willing in a brawl, but no soldier."
+    ]
+  },
+  Gatherer: {
+    Practiced: [
+      "He knows enough of the hedgerows and field margins to feed himself when the hunting is bad.",
+      "He can tell a useful plant from a dangerous one, most of the time.",
+      "He has spent enough time foraging to recognise what is worth picking and what is not."
+    ],
+    Poor: [
+      "He does not know the land well enough to trust his own eye in it.",
+      "He has eaten things he should not have, more than once, and learned only so much from it.",
+      "The wood bewilders him — he can find the obvious things, and miss everything else."
+    ]
+  },
+  Hewer: {
+    Practiced: [
+      "He handles an axe with more ease than most men who have not made it their trade.",
+      "He has felled enough trees in his time to know how a good cut should feel.",
+      "The work of splitting timber is not foreign to him, and he does not waste motion at it."
+    ],
+    Poor: [
+      "He swings an axe like a man who has thought about it more than practised it.",
+      "He can manage the work, but the wood does not cooperate with him the way it should.",
+      "He tires quickly at the heavy cutting and loses the line of the grain."
+    ]
+  },
+  Fossier: {
+    Practiced: [
+      "He has put in enough time at a spade to know how ground behaves when it is moved.",
+      "He does not shy from the hard work of digging and does not waste energy fighting the soil.",
+      "He reads the ground before he breaks it — a small habit that saves him time."
+    ],
+    Poor: [
+      "He digs with more will than method, and the ground tends to get the better of him.",
+      "Earthwork wears him out faster than it should — he has not found the rhythm of it.",
+      "He works hard at the ditch but cannot seem to make the soil do what he wants."
+    ]
+  }
+};
+
+// Picks one hint sentence for the given role and tier.
+// Returns null if no pool entry exists (graceful fallback).
+function pickHint(role, tier) {
+  const pool = HINT_POOL[role] && HINT_POOL[role][tier];
+  if (!pool || pool.length === 0) return null;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
 
 // Active vanguard skill pool — 7 live roles per the locked
 // Skill-Weight Model (barbarians-design-doc-characters-20260721.md).
@@ -1020,6 +1615,11 @@ function createSettler(name) {
   const practicedHint  = practicedRoles[Math.floor(Math.random() * practicedRoles.length)] || null;
   const poorHint       = poorRoles[Math.floor(Math.random() * poorRoles.length)] || null;
 
+  // Pick hint sentences once at creation — stored so render never re-rolls them.
+  const practicedSentence = practicedHint ? pickHint(practicedHint, "Practiced") : null;
+  const poorSentence      = poorHint      ? pickHint(poorHint, "Poor")           : null;
+
+
   return {
     id: name.toLowerCase(),
     name: name,
@@ -1027,6 +1627,8 @@ function createSettler(name) {
     tiers,                       // full role→tier map, authoritative for all resolution
     practicedHint,               // one Practiced role surfaced in text (may be null)
     poorHint,                    // one Poor role surfaced in text (may be null)
+    practicedSentence,           // pre-rolled hint sentence — static for this character's lifetime
+    poorSentence,                // pre-rolled hint sentence — static for this character's lifetime
     backstory: pickBackstory(headlineRole),
     alive: true,
     currentAction: null,
@@ -1154,16 +1756,10 @@ function renderCandidatePool() {
     const card = document.createElement("div");
     card.className = isSelected ? "candidate selected" : "candidate";
 
-    // Build tier hint line — Practiced and Poor hints surfaced in italic text.
-    // Each hint is one sentence. Empty if neither hint exists (shouldn't happen
-    // per generateCharacterTiers guarantee, but guard anyway).
-    const hintParts = [
-      candidate.practicedHint ? `Shows an aptitude for ${candidate.practicedHint}.` : "",
-      candidate.poorHint      ? `A poor hand at ${candidate.poorHint}.`             : ""
-    ].filter(Boolean);
-    const hintsHTML = hintParts.length
-      ? `<p class="cand-hints">${hintParts.join(" ")}</p>`
-      : "";
+    // Hint sentences are pre-rolled at character creation and stored on the object —
+    // reading them here keeps flavor text static across selection/deselection re-renders.
+    const hintSuffix = [candidate.practicedSentence, candidate.poorSentence].filter(Boolean).join(" ");
+    const flavorText = `${candidate.name}, ${candidate.backstory}${hintSuffix ? " " + hintSuffix : ""}`;
 
     card.innerHTML = `
       ${portraitZoneHTML(candidate.portraitSrc || null)}
@@ -1171,8 +1767,7 @@ function renderCandidatePool() {
         <p class="cand-name">${candidate.name}</p>
         <p class="cand-role">${candidate.skill}</p>
         <hr class="cand-divider">
-        <p class="cand-flavor">${candidate.name}, ${candidate.backstory}</p>
-        ${hintsHTML}
+        <p class="cand-flavor">${flavorText}</p>
         <p class="cand-supplies">${formatSupplies(candidate.suppliesBrought)}</p>
       </div>
     `;
@@ -1287,91 +1882,206 @@ function applyStartingSupplies(chosenCharacters) {
 // ---------------------------------------------
 // DISPLAY
 // Rendering is kept separate from simulation logic.
-// This function only reads gameState — it never changes it
-// (action changes happen in handleActionChange, triggered by the dropdown).
+// These functions only read gameState — they never modify it.
 // ---------------------------------------------
+
+// Maps a hunger state name to its CSS color variable value.
+// Used inline on the state word span rather than as a class,
+// since the decay filter is applied to the whole card and color
+// needs to be set before the filter desaturates it.
+const STATE_WORD_COLORS = {
+  hungry:   "var(--color-state-hungry)",
+  starving: "var(--color-state-starving)"
+};
+
+// Builds the face-crop portrait zone for a game screen card.
+// Uses a real img if portraitSrc is set; falls back to silhouette.
+function faceCropHTML(portraitSrc) {
+  const inner = portraitSrc
+    ? `<img src="${portraitSrc}" alt="">`
+    : `<div class="face-placeholder">${SILHOUETTE_SVG}</div>`;
+  return `<div class="char-face">${inner}</div>`;
+}
+
+// Builds the action slot for a character.
+// Empty = tappable well; assigned = shows abbreviated action label.
+function actionSlotHTML(character) {
+  if (!character.currentAction) {
+    return `
+      <div class="action-slot empty" data-character-id="${character.id}" title="Assign action">
+        <div class="action-slot-icon-placeholder"></div>
+      </div>`;
+  }
+  // Abbreviate the action label to fit the 32px slot — first word only.
+  const label = actionDisplayLabel(character.currentAction).split(" ")[0];
+  return `
+    <div class="action-slot assigned" data-character-id="${character.id}">
+      <div class="action-slot-label">${label}</div>
+    </div>`;
+}
+
+// Renders the full roster into #roster using the new parchment card system.
+// Each card is collapsed by default; tapping the card body toggles expansion.
+// Tapping the action slot opens the Action Tray for that character.
 function renderRoster() {
   const container = document.getElementById("roster");
   container.innerHTML = "";
 
   gameState.characters.forEach(character => {
     const card = document.createElement("div");
-    card.className = character.alive ? "character" : "character deceased";
+    const hunger = hungerStage(character);
+    let cardClasses = "char-card";
+    if (!character.alive) cardClasses += " dead";
+    else if (hunger) cardClasses += ` ${hunger}`;
+    card.className = cardClasses;
+    card.dataset.characterId = character.id;
 
     if (character.alive) {
-      const stage = hungerStage(character);
-      const hungerTag = stage ? `<div class="hunger-tag ${stage}">${stage}</div>` : "";
-      // Build hint line from guaranteed practicedHint and poorHint.
-      // Role names are used directly — 1e card redesign will style these properly.
-      const hintLine = character.practicedHint || character.poorHint
-        ? `<div class="secondary-skill">${[
-            character.practicedHint ? `Shows an aptitude for ${character.practicedHint}.` : "",
-            character.poorHint      ? `A poor hand at ${character.poorHint}.`             : ""
-          ].filter(Boolean).join(" ")}</div>`
+      const stateWordHTML = hunger
+        ? `<span class="char-state-word" style="color:${STATE_WORD_COLORS[hunger] || '#555'}">${hunger}</span>`
         : "";
 
+      // Hint sentences are pre-rolled at character creation — read stored values here.
+      const hintSuffix = [character.practicedSentence, character.poorSentence].filter(Boolean).join(" ");
+      const flavorText = `${character.name}, ${character.backstory}${hintSuffix ? " " + hintSuffix : ""}`;
+
       card.innerHTML = `
-        <div class="name">${character.name}</div>
-        <div class="skill">${character.skill}</div>
-        ${hintLine}
-        ${hungerTag}
-        <div class="backstory">${character.name}, ${character.backstory}</div>
-        <div class="task-row">
-          <label>Action: </label>
-          <select data-character-id="${character.id}">
-            <option value="">-- assign an action --</option>
-            ${ACTION_POOL.map(action =>
-              `<option value="${action}">${actionDisplayLabel(action)}</option>`
-            ).join("")}
-          </select>
+        <div class="char-card-row">
+          ${faceCropHTML(character.portraitSrc || null)}
+          <div class="char-identity">
+            <span class="char-name">${character.name}</span>
+            <span class="char-role">${character.skill}</span>
+            ${stateWordHTML}
+          </div>
+          <div class="char-action-col">
+            ${actionSlotHTML(character)}
+          </div>
+        </div>
+        <div class="char-flavor-row">
+          <p class="char-flavor-text">${flavorText}</p>
         </div>
       `;
+
+      // Tap card body → toggle expansion (not the action slot)
+      card.querySelector(".char-card-row").addEventListener("click", e => {
+        if (e.target.closest(".char-action-col")) return; // let slot handle it
+        card.classList.toggle("expanded");
+      });
+
+      // Tap action slot → open tray for this character
+      card.querySelector(".action-slot").addEventListener("click", e => {
+        e.stopPropagation();
+        openActionTray(character.id);
+      });
+
     } else {
+      // Dead card — identity only, no action slot, no expansion
       card.innerHTML = `
-        <div class="name">${character.name} — dead</div>
-        <div class="backstory">${character.name}, ${character.backstory}</div>
+        <div class="char-card-row">
+          ${faceCropHTML(character.portraitSrc || null)}
+          <div class="char-identity" style="flex:1">
+            <span class="char-name">${character.name}</span>
+            <span class="char-state-word" style="color:var(--color-state-dead)">dead</span>
+          </div>
+        </div>
       `;
     }
 
     container.appendChild(card);
   });
-
-  // Wire up dropdowns only for characters still alive.
-  container.querySelectorAll("select").forEach(dropdown => {
-    dropdown.addEventListener("change", handleActionChange);
-  });
-}
-
-// Called whenever a player picks an action from a dropdown.
-// Updates the matching character's currentAction in gameState,
-// then checks whether every settler now has an assignment.
-function handleActionChange(event) {
-  const characterId = event.target.getAttribute("data-character-id");
-  const chosenAction = event.target.value;
-
-  const character = gameState.characters.find(c => c.id === characterId);
-  character.currentAction = chosenAction || null;
-
-  updateStartDayAvailability();
 }
 
 // Enables the Start Day button only once every living vanguard
-// member has an action assigned. Shows a status message either way.
+// member has an action assigned. Button border/color communicates state.
 function updateStartDayAvailability() {
   const button = document.getElementById("startDayBtn");
-  const status = document.getElementById("assignmentStatus");
-
   const unassignedCount = gameState.characters.filter(
     c => c.alive && !c.currentAction
   ).length;
+  button.disabled = unassignedCount > 0;
+}
 
-  if (unassignedCount === 0) {
-    button.disabled = false;
-    status.textContent = "All of the vanguard is assigned. Ready to start the day.";
-  } else {
-    button.disabled = true;
-    status.textContent = `${unassignedCount} of the vanguard still need${unassignedCount === 1 ? "s" : ""} an action.`;
+// ---------------------------------------------
+// ACTION TRAY
+// Bottom sheet that lets the player assign an action to a character.
+// One tray instance is shared across all characters — context switches
+// when the player taps a different character's slot while the tray is open.
+// ---------------------------------------------
+
+let activeTrayCharacterId = null; // which character's slot opened the tray
+
+// Groups for the action tray, in display order.
+// Each group is an array of action ids from ACTION_POOL.
+// Group dividers render between groups; no labels shown.
+const ACTION_TRAY_GROUPS = [
+  ["Cook provisions", "Stalk beasts", "Gather mast"],     // Provisions
+  ["Build Palisade", "Fell timber"],                       // Fortification & Timber
+  ["Keep ward", "Spy out"]                                 // Watch & Recon
+];
+
+// Builds the action tray row list for a specific character.
+// Reflects all available actions; selected action gets slate color.
+function buildTrayRows(character) {
+  const tray = document.getElementById("trayActionList");
+  tray.innerHTML = "";
+
+  ACTION_TRAY_GROUPS.forEach((group, groupIdx) => {
+    if (groupIdx > 0) {
+      const rule = document.createElement("div");
+      rule.className = "tray-group-rule";
+      tray.appendChild(rule);
+    }
+
+    group.forEach(action => {
+      const isSelected = character.currentAction === action;
+      const row = document.createElement("div");
+      row.className = "tray-action-row" + (isSelected ? " tray-selected" : "");
+      row.innerHTML = `
+        <div class="tray-icon-box"><div class="tray-icon-inner"></div></div>
+        <span class="tray-action-name">${actionDisplayLabel(action)}</span>
+      `;
+      row.addEventListener("click", () => {
+        assignActionFromTray(character.id, action);
+      });
+      tray.appendChild(row);
+    });
+  });
+}
+
+// Opens the action tray for the given character.
+// If already open for a different character, context-switches without closing.
+function openActionTray(characterId) {
+  const character = gameState.characters.find(c => c.id === characterId);
+  if (!character || !character.alive) return;
+
+  // If tapping the same slot that's already open, close instead.
+  if (activeTrayCharacterId === characterId && document.getElementById("actionTray").classList.contains("open")) {
+    closeActionTray();
+    return;
   }
+
+  activeTrayCharacterId = characterId;
+  document.getElementById("trayHeader").textContent = `Assign ${character.name}`;
+  buildTrayRows(character);
+  document.getElementById("actionTray").classList.add("open");
+}
+
+// Closes the tray and clears active context.
+function closeActionTray() {
+  document.getElementById("actionTray").classList.remove("open");
+  activeTrayCharacterId = null;
+}
+
+// Called when the player taps an action row in the tray.
+// Assigns the action to the character, auto-closes tray, re-renders.
+function assignActionFromTray(characterId, action) {
+  const character = gameState.characters.find(c => c.id === characterId);
+  if (!character) return;
+
+  character.currentAction = action;
+  closeActionTray();
+  renderRoster();
+  updateStartDayAvailability();
 }
 
 // ---------------------------------------------
@@ -2454,68 +3164,107 @@ function fortificationStatusLine() {
   return `${stage.name} (${progressWord})`;
 }
 
-// Shows the current resource numbers at the top of the page.
-// Read-only view into gameState — never modifies it.
+// Updates the Status Bar (day counter + threat word) and Resource Strip.
+// Resource strip is a stub — icon art is pending; displays text counts
+// with the parchment palette until the icon generation pass lands.
+// Read-only — never modifies gameState.
 function renderResources() {
-  const container = document.getElementById("resourceSummary");
   const r = gameState.resources;
   const e = gameState.environment;
 
-  let warningLine = "";
+  // Status bar
+  document.querySelector("#statusBar .sb-day").textContent = `Day ${gameState.day}`;
+
+  // Threat word — placeholder until the Threat system (Horizon 2) is built.
+  // Show scout warning in that slot if one exists; otherwise blank.
+  const threatEl = document.querySelector("#statusBar .sb-threat");
   if (gameState.scoutWarning) {
     const w = gameState.scoutWarning;
-    const countText = w.countAccurate ? `${w.estimatedCount} outriders` : "an uncertain number of outriders";
-    const daysText = w.daysAccurate ? `${w.estimatedDays} day(s) out` : "an uncertain distance out";
-    warningLine = `<div>⚠ A raiding party is coming: ${countText}, ${daysText}</div>`;
+    const countText = w.countAccurate ? `${w.estimatedCount} outriders` : "outriders coming";
+    const daysText = w.daysAccurate ? `, ${w.estimatedDays} day${w.estimatedDays === 1 ? "" : "s"} out` : "";
+    threatEl.textContent = `${countText}${daysText}`;
+  } else {
+    threatEl.textContent = "";
   }
 
-  container.innerHTML = `
-    <div>Day: <span>${gameState.day}</span></div>
-    <div>Rations: <span>${r.rations}</span></div>
-    <div>Raw Food: <span>${r.rawFood}</span></div>
-    <div>Forage Food: <span>${r.forageFood}</span></div>
-    <div>Wood: <span>${r.wood}</span></div>
-    <div>Weapons: <span>${r.weapons}</span></div>
-    <div>Trees Left: <span>${e.treesRemainingNearby}</span></div>
-    <div>Fortification: <span>${fortificationStatusLine()}</span></div>
-    ${warningLine}
-  `;
+  // Resource strip — text stub (icon art pending)
+  const resources = [
+    { label: "Rations",    count: r.rations },
+    { label: "Raw food",   count: r.rawFood },
+    { label: "Forage",     count: r.forageFood },
+    { label: "Wood",       count: r.wood },
+    { label: "Weapons",    count: r.weapons },
+    { label: "Trees",      count: e.treesRemainingNearby }
+  ];
+  document.getElementById("resourceStrip").innerHTML = resources
+    .map(res => `<div class="res-item"><span class="res-count">${res.count}</span> ${res.label}</div>`)
+    .join("");
+
+  // Site card stage name line
+  const stage = FORTIFICATION_STAGES[gameState.fortification.stageIndex];
+  const artLabel = document.querySelector(".site-art-label");
+  const stageLine = document.getElementById("siteStageNameLine");
+  if (artLabel) artLabel.textContent = stage ? stage.name : "Complete";
+  if (stageLine) stageLine.textContent = stage ? fortificationStatusLine() : "";
 }
 
-// Shows the full day-by-day log, most recent day first.
-function renderLog() {
-  const container = document.getElementById("dayLog");
-  container.innerHTML = "";
+// Opens the Journal Screen after a day resolves, showing that day's log.
+// Fades in over the game screen. Tapping anywhere dismisses it.
+// The entries array is joined into a single paragraph per the component spec.
+// Character names are highlighted in the journal-names color.
+function showJournalScreen(dayRecord) {
+  const screen = document.getElementById("journalScreen");
+  const dayNames = ["One","Two","Three","Four","Five","Six","Seven","Eight","Nine","Ten",
+                    "Eleven","Twelve","Thirteen","Fourteen","Fifteen","Sixteen","Seventeen",
+                    "Eighteen","Nineteen","Twenty"];
+  const dayWord = dayNames[dayRecord.day - 1] || `${dayRecord.day}`;
 
-  [...gameState.log].reverse().forEach(dayRecord => {
-    const entryDiv = document.createElement("div");
-    entryDiv.className = "day-entry";
-    entryDiv.innerHTML = `
-      <div class="day-title">Day ${dayRecord.day}</div>
-      <ul>${dayRecord.entries.map(line => `<li>${line}</li>`).join("")}</ul>
-    `;
-    container.appendChild(entryDiv);
+  document.getElementById("journalDayHeader").textContent = `Day ${dayWord}`;
+
+  // Join entries into a flowing paragraph. Highlight known character names
+  // by wrapping them in a .journal-name span.
+  const allNames = gameState.characters.map(c => c.name);
+  let text = dayRecord.entries.join(" ");
+  allNames.forEach(name => {
+    // Replace whole-word occurrences only (word boundary), case-sensitive
+    const re = new RegExp(`\\b${name}\\b`, "g");
+    text = text.replace(re, `<span class="journal-name">${name}</span>`);
+  });
+  document.getElementById("journalEntryText").innerHTML = text;
+
+  // Show + fade in
+  screen.style.display = "block";
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => screen.classList.add("visible"));
   });
 }
 
-// Clears every character's task so the player has to
-// reassign for the next day. Keeps assignment deliberate
-// rather than carrying over automatically.
-function clearAllTasks() {
-  gameState.characters.filter(c => c.alive).forEach(c => c.currentAction = null);
+// Closes the Journal Screen with a fade and returns to game screen.
+function closeJournalScreen() {
+  const screen = document.getElementById("journalScreen");
+  screen.classList.remove("visible");
+  screen.addEventListener("transitionend", () => {
+    screen.style.display = "none";
+  }, { once: true });
 }
 
+
 // Called when the player clicks Start Day. Runs the simulation,
-// then refreshes every display and resets assignments for the next day.
+// shows the Journal screen for that day, then refreshes the game screen.
+// Actions persist across days — players change them only when they want to.
 function startDay() {
   runDay();
-  clearAllTasks();
+
+  // Capture the day record that just landed (last entry in the log)
+  const dayRecord = gameState.log[gameState.log.length - 1];
 
   renderResources();
-  renderLog();
   renderRoster();
   updateStartDayAvailability();
   renderGameOverIfNeeded();
+
+  // Show journal for this day — player taps to return to game screen
+  showJournalScreen(dayRecord);
 }
 
 // Shows a clear victory/defeat banner once the game has ended,
@@ -2550,6 +3299,21 @@ renderCandidatePool();
 document.getElementById("rerollBtn").addEventListener("click", rerollCandidates);
 document.getElementById("confirmVanguardBtn").addEventListener("click", confirmVanguard);
 document.getElementById("startDayBtn").addEventListener("click", startDay);
+
+// Close tray on tap outside — but allow taps on action slots to
+// context-switch without first closing. Any click that doesn't land
+// inside the tray or on an action slot closes the tray.
+document.addEventListener("click", e => {
+  if (!document.getElementById("actionTray").classList.contains("open")) return;
+  if (e.target.closest("#actionTray")) return;
+  if (e.target.closest(".action-slot")) return;
+  closeActionTray();
+});
+
+// Journal screen — tap anywhere to dismiss and return to game
+document.getElementById("journalScreen").addEventListener("click", () => {
+  closeJournalScreen();
+});
 
 </script>
 </body>
