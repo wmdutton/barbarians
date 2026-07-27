@@ -1,171 +1,282 @@
 # Barbarians — Components
+*Implementation specs for all UI components. Build reference — what and how, not why. Last verified against: v0.5.0.0.*
 
-*Every named UI piece in `index.html`: what it's called, what it looks like,
-what JS function renders/controls it, and what it in turn affects. Use this
-doc to tell Claude "change the X component" and have it land on the right
-CSS selector and the right function on the first try. Colors referenced
-below are tokens — see [tokens.md](./tokens.md) for values.*
+*For design rationale see `barbarians-ui-decisions-20260726.md`. For token values see `barbarians-tokens-20260726.md`.*
 
 ---
 
-## How to talk to Claude about components
+## Screen Layout
 
-Refer to a component by the name in **bold** at the start of each entry
-below (e.g. "the **candidate card**" or "the **hunger tag**"). That name
-maps directly to a CSS selector, so Claude can go straight to the right
-rule instead of guessing which `<div>` you mean.
+Three full-screen states. Only one is ever visible at a time.
 
-If you want to change *behavior* (not just appearance), mention the
-function name if you know it (e.g. "change how `resolveHunt` picks flavor
-text") — otherwise just describe what you want changed about the component
-and Claude will find the controlling function from this doc.
+| Screen | Stack order (top → bottom) |
+|---|---|
+| **Selection Screen** | Header block → Button row → Character cards (2-col grid, scrollable) |
+| **Game Screen** | Status Bar → Resource Strip → Site Card → Character Cards (scrollable) → Start Day Button |
+| **Journal Screen** | Day Header → Rule → Journal Entry → Return Touch |
 
----
-
-## Screen 1 — Vanguard Selection
-
-This is the first screen shown. Controlled by `#selectionScreen` (hidden
-once a vanguard is confirmed, via `confirmVanguard()`).
-
-### Selection instructions
-- **Selector:** `#selectionInstructions`
-- **What it is:** The line of italic text above the candidate pool ("Choose 5 men for the vanguard. Selected: X / 5.")
-- **Rendered by:** `renderCandidatePool()` — rewritten every time selection changes
-- **Controls:** Nothing downstream; pure status display.
-
-### Candidate pool
-- **Selector:** `#candidatePool` (container), `.candidate` (each card)
-- **What it is:** The flex-wrap grid of up to 8 selectable candidate cards.
-- **Rendered by:** `renderCandidatePool()`, which loops over the `candidatePool` array (module-level variable, not part of `gameState` — it only exists pre-game) and builds one `.candidate` div per entry.
-- **Controlled by:** `generateCandidatePool()` (initial 8), `rerollCandidates()` (regenerates unselected ones)
-- **Controls:** Clicking a card calls `toggleCandidateSelection()`, which updates `selectedIds` and re-renders.
-
-### Candidate card
-- **Selector:** `.candidate` (base), `.candidate.selected` (selected state)
-- **What it is:** One candidate's info block — name, primary skill, secondary skill (if any), backstory, and starting supplies.
-- **Sub-parts:**
-  - `.candidate .name` — candidate's name, bold
-  - `.candidate .skill` — primary skill, gold italic (`--color-accent-gold-light`)
-  - `.candidate .secondary-skill` — secondary skill, smaller/dimmer gold (`--color-accent-gold-muted`). **Omitted entirely for Laborer candidates** — Laborer has no secondary skill by design (see design-rationale.md).
-  - `.candidate .backstory` — flavor text sentence
-  - `.candidate .supplies` — "Brings: X rations, Y wood" line, green-tinted (`--color-supplies-text`)
-- **Rendered by:** `renderCandidatePool()`, built from a `createSettler()` object
-- **Controls:** Click toggles selection (see above); selection count gates the Confirm button.
-
-### Reroll button
-- **Selector:** `#rerollBtn`
-- **What it is:** "Reroll Remaining Candidates" button.
-- **Rendered by:** Static HTML; enabled/disabled state set by `renderCandidatePool()` based on `rerollsRemaining`
-- **Controls:** Click calls `rerollCandidates()` — regenerates unselected candidates, decrements `rerollsRemaining` (starts at `MAX_REROLLS` = 3).
-
-### Reroll count
-- **Selector:** `#rerollCount`
-- **What it is:** "Rerolls remaining: N" text next to the reroll button.
-- **Rendered by:** `renderCandidatePool()`
-
-### Confirm Vanguard button
-- **Selector:** `#confirmVanguardBtn`
-- **What it is:** Locks in the 5 selected candidates and starts the game.
-- **Rendered by:** Static HTML; enabled only when `selectedIds.length === 5` (set in `renderCandidatePool()`)
-- **Controls:** Click calls `confirmVanguard()` — hides `#selectionScreen`, shows `#gameScreen`, applies starting supplies, does first render of the game screen.
+Transition Game → Journal: fade to black (300ms), Journal fades in (300ms). No slide.
 
 ---
 
-## Screen 2 — Game Screen
+## 1. Character Card — Selection Screen
 
-Controlled by `#gameScreen` (hidden until `confirmVanguard()` runs).
+**Layout:** Vertical. Full-figure portrait top, card body below. Two-column grid, single-column on mobile.
 
-### Resource summary bar
-- **Selector:** `#resourceSummary`
-- **What it is:** The top strip showing Day, Rations, Raw Food, Forage Food, Wood, Weapons, Trees Left, Palisade %, and (if active) the scout warning line.
-- **Rendered by:** `renderResources()` — pure read of `gameState.resources`, `gameState.environment`, and `gameState.scoutWarning`. Called after every `startDay()`.
-- **Controls:** Nothing; read-only display. The ⚠ warning line only appears when `gameState.scoutWarning` is non-null (set by `resolveScoutForEnemiesForDay()`, cleared after each wave resolves).
+### Portrait Zone
 
-### Game over banner
-- **Selector:** `#gameOverBanner`, with modifier classes `.game-over.victory` / `.game-over.defeat`
-- **What it is:** The full-width victory/defeat message shown once the game ends, plus the "Start a New Vanguard" reset button.
-- **Rendered by:** `renderGameOverIfNeeded()`, called at the end of `startDay()`. Only renders content once `gameState.gameOver` is true (set by `checkGameOver()`).
-- **Controls:** Its "Start a New Vanguard" button (`#resetBtn`) calls `location.reload()` — a full page refresh, not a soft reset. Also disables `#startDayBtn` so no further days can be played.
+```
+height: --portrait-height-full (170px)
+background: --color-card-portrait-bg
+object-fit: cover, object-position: center top
+```
 
-### Roster
-- **Selector:** `#roster` (container), `.character` (each card)
-- **What it is:** The list of all 5 vanguard members (or fewer, as they die), each with a task-assignment dropdown.
-- **Rendered by:** `renderRoster()`, called after every `startDay()` and after `confirmVanguard()`. Loops over `gameState.characters`.
+**Portrait placeholder** — shown when no portrait image is assigned. Inline SVG: generic standing figure silhouette, 72×72px, `opacity: 0.28`, centered in zone. Defined as `SILHOUETTE_SVG` constant in JS; rendered via `portraitZoneHTML(src)` helper. To add a real portrait: set `candidate.portraitSrc = "path/to/file.png"` — the helper renders an `<img>` automatically.
 
-### Character card (alive)
-- **Selector:** `.character` (base)
-- **What it is:** One living settler's card — name, primary skill, secondary skill (if any), hunger tag (if any), backstory, and a task dropdown.
-- **Sub-parts:**
-  - `.character .name` — bold name
-  - `.character .skill` — primary skill, gold italic
-  - `.character .secondary-skill` — secondary skill, smaller/dimmer. **Omitted for Laborer**, same rule as the candidate card.
-  - `.hunger-tag` (`.hungry` or `.starving` modifier) — only rendered when `hungerStage()` returns non-null
-  - `.character .backstory` — flavor text
-  - `.character .task-row` — contains the `<select>` task dropdown
-- **Rendered by:** `renderRoster()`
-- **Controls:** The task `<select>` fires `handleTaskChange()` on change, which sets `character.currentTask` and calls `updateStartDayAvailability()`.
+**Fade overlay** — absolutely positioned `div.candidate-portrait-fade` at bottom of portrait zone. Height `--portrait-fade-height` (80px). Background `--portrait-fade`. Bleeds portrait into card body.
 
-### Character card (deceased)
-- **Selector:** `.character.deceased`
-- **What it is:** A simplified card for a dead settler — dimmed (`opacity: 0.6`), red-tinted border (`--color-status-deceased`), name struck through in red text (`--color-status-deceased-text`), no dropdown.
-- **Rendered by:** `renderRoster()`, when `character.alive` is `false`
+### Card Body
 
-### Hunger tag
-- **Selector:** `.hunger-tag`, with `.hungry` or `.starving` modifier
-- **What it is:** Small uppercase pill shown on a character card when they've missed a meal.
-- **Rendered by:** `renderRoster()`, driven by `hungerStage(character)` — returns `"hungry"` at 1 day without food, `"starving"` at 2+, `null` (no tag) at 0. 3 days is fatal (handled by `checkStarvation()`, not this display function).
+| Zone | Element | Spec |
+|---|---|---|
+| Name | `p.cand-name` | Spectral SC 11px 700. `--color-ink-primary`. `--tracking-wide`. |
+| Role | `p.cand-role` | Spectral SC 8px 400 uppercase. `--color-ink-role`. `--tracking-wider`. |
+| Divider | `hr.cand-divider` | 1px, `--divider-ink`. Margin 4px top/bottom. |
+| Flavor text | `p.cand-flavor` | Spectral italic 9.5px. `--color-ink-secondary`. Line-height `--leading-base`. |
+| Tier hints | `p.cand-hints` | Spectral italic 9px. `--color-ink-muted`. One sentence each for Practiced and Poor hints. |
+| Supplies | `p.cand-supplies` | Spectral SC 8px uppercase. `--color-supplies-parchment`. No label prefix — contents only ("4 rations"). |
 
-### Task dropdown
-- **Selector:** `select` (inside `.task-row`)
-- **What it is:** The per-character task assignment control. Options come from `TASK_POOL` (Woodcutting, Build Palisade, Hunt, Cook, Perimeter Watch, Forage, Scout).
-- **Rendered by:** `renderRoster()`
-- **Controls:** `handleTaskChange()` on change → `updateStartDayAvailability()`, which enables/disables `#startDayBtn`.
+### Card States
 
-### Start Day button
-- **Selector:** `#startDayBtn`
-- **What it is:** The main turn-advance button.
-- **Rendered by:** Static HTML; enabled/disabled by `updateStartDayAvailability()` (only enabled once every living character has a task)
-- **Controls:** Click calls `startDay()` — the top-level function that runs `runDay()` (all task/combat/consumption resolution), then re-renders resources, log, roster, and checks for game over.
+| State | Border | Background | Extra |
+|---|---|---|---|
+| Default | `--card-border-well` | `--color-card-bg` | — |
+| Selected | `--card-border-selected` | `--color-card-bg` | `--card-shadow-selected` + filled dot 8px, `--color-selected`, top-right corner (absolute, 10px in) |
 
-### Assignment status
-- **Selector:** `#assignmentStatus`
-- **What it is:** The italic status line below Start Day ("All settlers assigned..." or "N settler(s) still need a task.")
-- **Rendered by:** `updateStartDayAvailability()`
+### Selection Screen Header
 
-### Day log
-- **Selector:** `#dayLog` (container), `.day-entry` (each day's block)
-- **What it is:** The scrolling history of every resolved day, most recent first.
-- **Rendered by:** `renderLog()`, called after every `startDay()`. Reads `gameState.log` (array of `{ day, entries }` objects built up by `runDay()`).
-- **Sub-parts:**
-  - `.day-entry .day-title` — "Day N" header, gold
-  - `.day-entry ul` — bullet list of that day's narrative log lines
+Sits above the button row and card grid. Max-width 680px, centered.
+
+```
+.sel-header padding: 28px 16px 16px
+```
+
+| Element | Spec |
+|---|---|
+| Title `p.sel-title` | Spectral SC 38px 700. `--color-ink-primary`. Letter-spacing 0.06em. |
+| Rule `hr.sel-rule` | 1px, `--divider-ink`. Max-width 220px, centered. Margin-bottom 10px. |
+| Instructions `#selectionInstructions` | Spectral italic 13px. `--color-ink-muted`. Updates live: "Choose 5 men — N of 5 selected." |
+
+**Version tag** `p.sel-version` — `position: absolute`, top-right (top 14px, right 18px). 7px, `--color-ink-ornament`, opacity 0.6. Visible but not part of the composition.
+
+### Button Row `.sel-actions`
+
+Sits between header and card grid. Max-width 680px, centered, `justify-content: center`. Margin: 10px auto 24px.
+
+| Button | Class | Label logic |
+|---|---|---|
+| Reroll | `.sel-btn.sel-btn-secondary` | "Reroll Characters" on load; "N Rerolls Remaining" / "1 Reroll Remaining" after first use. Disabled at 0 rerolls. |
+| Confirm | `.sel-btn.sel-btn-primary` | "Confirm Vanguard". Disabled until exactly 5 selected. |
+
+Button shared spec: Spectral SC 9px, `--tracking-widest`, uppercase, padding 11px 20px, border-radius 8px.
+- Secondary: transparent bg, `1.5px solid --color-parchment-deep`, `--color-ink-muted` text.
+- Primary: transparent bg, `1.5px solid --color-selected`, `--color-selected` text. Hover: `rgba(139,58,47,0.06)` bg.
 
 ---
 
-## Global / Shared
+## 2. Character Card — Game Screen
 
-### Version footer
-- **Selector:** `#versionFooter`
-- **What it is:** Small centered text at the bottom of the page showing version, author, date.
-- **Rendered by:** Static HTML — manually updated by hand each version bump (not JS-driven).
+**Layout:** Horizontal. Single column, scrollable. Collapsed by default.
 
-### Task select (shared style)
-- **Selector:** `select` (bare tag selector — applies to every dropdown in the app)
-- **What it is:** The shared visual style (dark background, bordered) for all `<select>` elements, currently just the per-character task dropdown.
+#### Collapsed
+
+| Zone | Content | Spec |
+|---|---|---|
+| Portrait Zone | Face-crop portrait | 46px × 46px. `object-fit: cover`, centered on face. |
+| Identity Block | Name / Role / State word | Name: Spectral SC 11px 700. Role: Spectral SC 8px uppercase `#7a5c2e`. State word: Spectral italic 8px, color per state table. |
+| Right Column | Action slot | Fixed 48px wide. See Component 4. |
+
+Card height: 46px collapsed.
+
+#### Expanded
+
+Tap card body (not action slot) to expand. Flavor text block appears below the collapsed row, separated by 1px gradient rule. Flavor text: Spectral italic 9.5px `#3a2f1e`, line-height 1.65, padding `5px 10px 9px 10px`. Portrait does not change size.
+
+**States:**
+- Default: `1px solid #c8b89a` border, `#f5ede0` background
+- Selected: `1px solid #8b3a2f` border + `0 0 0 1px #8b3a2f33` shadow
 
 ---
 
-## Mobile responsiveness
+## 3. Character States
 
-All of the above components get layout adjustments (not new components) at
-viewports ≤600px, defined in the `@media (max-width: 600px)` block near the
-bottom of the `<style>` tag. This block changes sizing/stacking only — it
-introduces no new colors or components, so nothing here needed updating
-when tokens were added.
+Applied to the entire `.char-card` element via CSS class. No per-child overrides.
+
+| State | Class | Background | Border | Filter | State word | State word color |
+|---|---|---|---|---|---|---|
+| Well | — | `#f5ede0` | `#c8b89a` | none | — | — |
+| Hungry | `.hungry` | `#ddd8cc` | `#9a9080` | `saturate(0.55) brightness(0.95)` | *hungry* | `#7a6848` |
+| Starving | `.starving` | `#c4beb4` | `#706860` | `saturate(0.2) brightness(0.88)` | *starving* | `#4a3e30` opacity 0.75 |
+| Dead | `.dead` | `#c0bcb4` | `#888880` | `grayscale(1) brightness(0.85)` | *dead* | `#555` |
+
+State word: Spectral italic 8px 400. Sits below Role line in Identity Block.
+
+Dead: entire card `opacity: 0.5`. Right column empty — identity block runs full width. No action slot.
 
 ---
 
-*Last verified against `index.html` v0.0.1.1. Update this tag whenever
-`index.html`'s version bumps AND the change adds/renames a component or
-changes what function controls it — see project instructions for the sync
-rule.*
+## 4. Action Slot & Action Tray
+
+### Action Slot
+
+Fixed 48px right column on every game screen card. Vertically centered.
+
+| State | Spec |
+|---|---|
+| Empty | Background `#e8dbc6`. `box-shadow: inset 1px 2px 4px rgba(50,20,5,0.09)`. No border. Tappable — opens Action Tray. |
+| Assigned | Background `rgba(138,106,58,0.13)`. No border. 32×32px inner slot, border-radius 6px. Icon fills slot. |
+
+### Action Tray
+
+Bottom sheet. Slides up from bottom of screen on action slot tap.
+
+| Element | Spec |
+|---|---|
+| Surface | Parchment `#eee5d2` |
+| Top edge | 1px gradient ink rule + handle pill: 36px wide, 3px tall, `#c8b89a`, centered, opacity 0.7 |
+| Header | "Assign [Name]" — Spectral SC 8px `#9a8060` uppercase letter-spacing 0.2em |
+| Action row | 32px icon box + action name. Row padding `7px 8px`. Border-radius 8px. |
+| Icon box | 32×32px border-radius 6px. Background `rgba(138,106,58,0.10)`. Placeholder border during development. |
+| Icon inner | 18×18px border-radius 3px. Background `rgba(122,92,46,0.45)`. |
+| Action name | Spectral SC 9px uppercase letter-spacing 0.1em. Color `#2a1f10` default, `#4f6470` (slate) when selected. |
+| Group divider | 1px gradient ink rule. No group labels. |
+| Group order | Provisions → Fortification & Timber → Watch & Recon |
+
+**Character-specific:** not all characters have access to all actions. Tray reflects available actions for the active character only.
+
+**Dismiss and context-switching:**
+- Tap outside → closes, no change
+- Tap a different character's slot → stays open, context switches
+- Tap same assigned slot that opened tray → closes, no change
+- Auto-closes after each assignment
+
+---
+
+## 5. Status Bar — Game Screen
+
+Pinned to top. Single row.
+
+| Element | Position | Spec |
+|---|---|---|
+| Day number | Left | Spectral SC 10px 700 uppercase. e.g. "DAY 4" |
+| Threat word | Center | Spectral italic 13px `#8b4a2f`. e.g. "uneasy" |
+| Version | Right | Spectral SC 7px `#c8b89a` uppercase. Developer reference only. |
+
+Separated from Resource Strip below by 1px gradient ink rule.
+
+---
+
+## 6. Resource Strip — Game Screen
+
+Sits below Status Bar, above Site Card. Scrolls horizontally.
+
+**Collapsed (default):** Icon + number overlaid center. Tap to expand.
+**Expanded:** Labels appear below each icon (Spectral SC 6.5px uppercase).
+**Number:** Lining-figure font. 11px 700. Centered over icon. `text-shadow: --resource-count-shadow`. `font-variant-numeric: lining-nums tabular-nums`.
+**Icon size:** 28×28px. Journal-sketch aesthetic (ChatGPT-generated, pending).
+
+---
+
+## 7. Site Card — Game Screen
+
+**Layout:** Vertical. Full width. Fixed height — not collapsible.
+
+| Zone | Content | Spec |
+|---|---|---|
+| Art Zone | Stage progression illustration | `--site-art-height` (110px). `object-fit: cover`, `width: 100%`. Tappable — opens Site Modal. Placeholder: `#d8ccb4` fill, centered label. |
+| Stage Name Line | Current fortification stage name | Spectral SC 9px 400 uppercase. `--color-ink-muted`. Padding `5px 12px`. Background `--color-card-bg`. |
+| Divider | Ink rule | 1px, `--divider-ink`. |
+| Stats Row | Site resource icons, horizontally scrollable | Padding `7px 10px 8px`. `overflow-x: auto`. Background `--color-card-bg`. Each stat tappable — opens Resource Modal. |
+
+**Card border/radius:** same as character card — `--card-border-well`, `--card-radius`.
+
+**Stats Row — individual stat states:**
+
+| State | Display | Behavior |
+|---|---|---|
+| Hidden | Nothing rendered | Not tappable |
+| Approximate | Icon only, `opacity: 0.45`, no number | Tappable → Resource Modal with vague flavor |
+| Known | Icon + number centered over icon | Tappable → Resource Modal with concrete flavor |
+
+---
+
+## 8. Site Modal
+
+Triggered by tapping the Site Card art zone. Covers game screen with dark scrim. Tap anywhere to dismiss.
+
+| Zone | Spec |
+|---|---|
+| Scrim | `background: --modal-scrim`. Full screen. |
+| Modal box | `--color-card-bg` bg. `--card-border-well`. `border-radius: --modal-radius`. `padding: --modal-padding`. Width `--modal-width`. |
+| Title | Spectral SC 13px 600. `--color-ink-primary`. Uppercase. `--tracking-wider`. Centered. |
+| Rule | 1px `--divider-ink`. |
+| Body | Spectral italic 13px. `--color-ink-secondary`. `line-height: --leading-base`. Centered. |
+| Dismiss | Spectral SC 9px. `--color-ink-muted`. Uppercase. `--tracking-widest`. Centered. |
+
+---
+
+## 9. Resource Modal
+
+Triggered by tapping an approximate or known stat icon on the Site Card. Same scrim/dismiss behavior as Site Modal.
+
+| Zone | Spec |
+|---|---|
+| Icon | `--modal-icon-size` (36px). Centered. No box. |
+| Title | Same as Site Modal title spec. |
+| Body | Spectral italic 13px. `--color-ink-secondary`. Centered. Vague or concrete per stat state. |
+| Dismiss | Same as Site Modal. |
+
+---
+
+## 10. Start Day Button — Game Screen
+
+Pinned to bottom. Full width. Ink rule above.
+
+| State | Border | Text color | Tappable |
+|---|---|---|---|
+| Enabled | `1.5px solid #8b3a2f` | `#8b3a2f` | Yes |
+| Disabled | `1.5px solid #c8b89a` | `#c8b89a` | No |
+
+Background always `#eee5d2`. Spectral SC 9px uppercase `--tracking-widest`. Border-radius 8px. Label: "Begin the Day".
+
+---
+
+## 11. Journal Screen
+
+Background `#110d08`.
+
+| Zone | Spec |
+|---|---|
+| Day Header | Spectral SC 22px 600 `#c8902a`. Left-aligned. e.g. "Day Four" |
+| Rule | 1px gradient `#7a4a18` → transparent. |
+| Journal Entry | Spectral italic 16px `#d4b87a`. Character names in `#e8c890`. Single paragraph. |
+| Return Touch | Spectral SC ~12px `#5a3e1a` centered. Whole screen tappable. Label "Dawn". |
+
+---
+
+## Asset Spec — Character Portraits
+
+| Crop | Usage | Display size | Notes |
+|---|---|---|---|
+| Full figure | Selection screen | ~full card width × 170px | `object-fit: cover`, `object-position: center top` |
+| Face crop | Collapsed game card | 46×46px | `object-fit: cover`, centered on face |
+
+- Git paths only — never base64 inlined
+- Trim ~14–15% transparent canvas margin with PIL bounding-box before committing (`extract_assets.py`)
+- Set `candidate.portraitSrc = "path"` to attach a portrait; `portraitZoneHTML()` renders it automatically. No src → silhouette placeholder.
+
+---
+
+## Deprecated
+
+*(none yet)*
