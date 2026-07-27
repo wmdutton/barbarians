@@ -1,8 +1,8 @@
 <!--
   Barbarians — Prototype
-  Version: 0.4.0.0
+  Version: 0.5.0.0
   Author: Mason Dutton
-  Last updated: 2026-07-25
+  Last updated: 2026-07-26
 
   Full changelog is kept separately (not in this file); see
   barbarians-changelog.md, attached to the project.
@@ -15,7 +15,8 @@
   Comments in this file explain WHAT the code does. For WHY specific
   numbers/rules were chosen, see design-rationale.md (repo root).
   For the full game vision and locked decisions, see the project's
-  design doc (barbarians-design-doc.md).
+  design docs in /docs/. Token reference: /docs/tokens.md.
+  Component reference: /docs/components.md.
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -24,49 +25,43 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Barbarians — Prototype</title>
 <style>
-  /* ---------------------------------------------
-     DESIGN TOKENS
-     Every color and font in this file is defined ONCE here and
-     referenced everywhere else via var(--token-name). This is a
-     CSS custom properties block (the :root selector targets the
-     <html> element, making these variables available anywhere in
-     the document). Change a value here and every element using it
-     updates automatically — no more hunting down five copies of
-     the same hex code.
+  @import url('https://fonts.googleapis.com/css2?family=Spectral+SC:wght@400;600;700&family=Spectral:ital,wght@0,400;0,700;1,400;1,700&display=swap');
 
-     Full reference, naming rationale, and "when to add a new
-     token" guidance: see /docs/tokens.md in the repo.
+  /* ---------------------------------------------
+     DESIGN TOKENS — LEGACY (game screen, dark theme)
+     Original tokens kept intact for the game screen.
+     New parchment tokens below cover the selection screen.
+     Full reference: /docs/tokens.md in the repo.
      --------------------------------------------- */
   :root {
     /* Backgrounds — darkest to lightest */
-    --color-bg-page: #1b1b1b;         /* page background, dark selects/buttons text-on */
-    --color-bg-panel: #262626;        /* character cards, candidate cards, resource bar */
-    --color-bg-log-entry: #202020;    /* day log entries — slightly darker than panel */
-    --color-bg-candidate-selected: #33301f; /* selected candidate card tint */
+    --color-bg-page: #1b1b1b;
+    --color-bg-panel: #262626;
+    --color-bg-log-entry: #202020;
+    --color-bg-candidate-selected: #33301f;
 
     /* Text */
-    --color-text-primary: #e8e0d0;    /* main body text */
-    --color-text-muted: #bdbdbd;      /* backstory text */
-    --color-text-disabled: #999;      /* disabled button text */
-    --color-text-footer: #666;        /* version footer */
+    --color-text-primary: #e8e0d0;
+    --color-text-muted: #bdbdbd;
+    --color-text-disabled: #999;
+    --color-text-footer: #666;
 
-    /* Accent — the game's signature bronze/gold, used for
-       emphasis, primary buttons, and skill labels */
-    --color-accent-gold: #8a6d3b;     /* primary buttons, selected border, on-card accents */
-    --color-accent-gold-light: #c9a86a; /* skill labels, italic emphasis text, warnings */
-    --color-accent-gold-muted: #8a7a54; /* secondary-skill text — dimmer than primary gold */
+    /* Accent — bronze/gold */
+    --color-accent-gold: #8a6d3b;
+    --color-accent-gold-light: #c9a86a;
+    --color-accent-gold-muted: #8a7a54;
 
     /* Borders / dividers */
-    --color-border-default: #555;     /* default card/input border */
-    --color-border-subtle: #333;      /* footer divider */
+    --color-border-default: #555;
+    --color-border-subtle: #333;
 
     /* Status — hunger tags */
     --color-status-hungry-bg: #6b5a1f;
     --color-status-hungry-text: #e6d6a6;
     --color-status-starving-bg: #6b2f1f;
     --color-status-starving-text: #e6b6a6;
-    --color-status-deceased: #6b1f1f; /* deceased card border */
-    --color-status-deceased-text: #a05050; /* deceased character name */
+    --color-status-deceased: #6b1f1f;
+    --color-status-deceased-text: #a05050;
 
     /* Status — game over banners */
     --color-victory-bg: #2f4a2f;
@@ -77,12 +72,85 @@
     --color-defeat-border: #8a5a5a;
 
     /* Status — misc accents */
-    --color-supplies-text: #7a9e7a;   /* "Brings: ..." line on candidate cards, greenish */
+    --color-supplies-text: #7a9e7a;
 
-    /* Fonts */
-    --font-body: Georgia, serif;      /* the only font family in use, tokenized so it's
-                                          a one-line change if that ever needs to differ
-                                          per-element (e.g. a future monospace debug view) */
+    /* Fonts — legacy game screen */
+    --font-body: Georgia, serif;
+
+    /* -----------------------------------------
+       DESIGN TOKENS — PARCHMENT SYSTEM
+       Selection screen and future parchment surfaces.
+       Source of truth: /docs/tokens.md
+       ----------------------------------------- */
+
+    /* Parchment surfaces */
+    --color-parchment:        #eee5d2;
+    --color-parchment-mid:    #d8ccb4;
+    --color-parchment-deep:   #c8b89a;
+
+    /* Card surfaces */
+    --color-card-bg:          #f5ede0;
+    --color-card-portrait-bg: #d8ccb4;
+
+    /* Ink — text on parchment */
+    --color-ink-primary:      #2a1f10;
+    --color-ink-secondary:    #3a2f1e;
+    --color-ink-role:         #7a5c2e;
+    --color-ink-ornament:     #b8a07a;
+    --color-ink-muted:        #9a8060;
+
+    /* Accent — selected / danger */
+    --color-selected:         #8b3a2f;
+    --color-selected-glow:    rgba(139,58,47,0.2);
+
+    /* Status */
+    --color-supplies-parchment: #5a7a4a;
+
+    /* Typography */
+    --font-display:   'Spectral SC', Georgia, serif;
+    --font-body-new:  'Spectral', Georgia, serif;
+    --font-numeric:   'Trebuchet MS', Arial, sans-serif;
+
+    /* Type sizes */
+    --text-xs:   8px;
+    --text-sm:   9px;
+    --text-base: 9.5px;
+    --text-md:   11px;
+    --text-lg:   13px;
+    --text-xl:   16px;
+
+    /* Leading */
+    --leading-tight: 1.2;
+    --leading-base:  1.65;
+
+    /* Tracking */
+    --tracking-wide:   0.1em;
+    --tracking-wider:  0.14em;
+    --tracking-widest: 0.2em;
+
+    /* Card geometry */
+    --card-radius:          10px;
+    --card-border-well:     1px solid #c8b89a;
+    --card-border-selected: 1px solid #8b3a2f;
+    --card-shadow-selected: 0 0 0 2px rgba(139,58,47,0.2);
+    --card-padding:         12px;
+
+    /* Portrait zones — selection screen */
+    --portrait-height-full: 170px;
+    --portrait-fade-height: 80px;
+
+    /* Layout gaps */
+    --gap-xs: 4px;
+    --gap-sm: 8px;
+    --gap-md: 12px;
+    --gap-lg: 16px;
+
+    /* Component shorthands */
+    --divider-ink: linear-gradient(to right, transparent, rgba(200,184,154,0.7), transparent);
+    --portrait-fade: linear-gradient(to bottom, rgba(238,229,210,0) 0%, rgba(238,229,210,0.6) 50%, #eee5d2 88%);
+
+    /* Transitions */
+    --transition-card: 150ms ease;
   }
 
   * {
@@ -239,73 +307,268 @@
     margin: 0;
     padding-left: 20px;
   }
+  /* ---------------------------------------------
+     SELECTION SCREEN — parchment skin
+     Component spec: /docs/components.md §1
+     --------------------------------------------- */
+
+  /* Page shell for the selection screen — parchment background,
+     centered, readable at desktop and mobile widths. */
+  #selectionScreen {
+    background: var(--color-parchment);
+    min-height: 100vh;
+    padding: 0 16px 48px;
+    box-sizing: border-box;
+    font-family: var(--font-display);
+    position: relative;
+  }
+
+  /* Version tag — pinned top-right, out of the way */
+  #selectionScreen .sel-version {
+    position: absolute;
+    top: 14px;
+    right: 18px;
+    font-family: var(--font-display);
+    font-size: 7px;
+    color: var(--color-ink-ornament);
+    letter-spacing: var(--tracking-wide);
+    opacity: 0.6;
+    margin: 0;
+  }
+
+  /* ---- Header block ---- */
+  .sel-header {
+    text-align: center;
+    padding: 28px 16px 16px;
+    max-width: 680px;
+    margin: 0 auto;
+  }
+
+  /* Main title */
+  #selectionScreen .sel-title {
+    font-family: var(--font-display);
+    font-size: 38px;
+    font-weight: 700;
+    color: var(--color-ink-primary);
+    letter-spacing: 0.06em;
+    margin: 0 0 16px;
+    line-height: 1;
+  }
+
+  /* Ornamental rule under the title */
+  .sel-rule {
+    height: 1px;
+    background: var(--divider-ink);
+    border: none;
+    margin: 0 auto 10px;
+    max-width: 220px;
+  }
+
+  /* Instruction line */
   #selectionInstructions {
-    color: var(--color-accent-gold-light);
+    font-family: var(--font-body-new);
     font-style: italic;
+    font-size: var(--text-lg);
+    color: var(--color-ink-muted);
+    text-align: center;
+    margin: 0;
   }
+
+  /* 2-column card grid. Gaps collapse on narrow screens (see mobile). */
   #candidatePool {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--gap-md);
+    max-width: 680px;
+    margin: 0 auto;
   }
+
+  /* ---- Candidate card ---- */
   .candidate {
-    width: 200px;
-    padding: 10px;
-    background: var(--color-bg-panel);
-    border-left: 3px solid var(--color-border-default);
+    background: var(--color-card-bg);
+    border: var(--card-border-well);
+    border-radius: var(--card-radius);
+    overflow: hidden;
     cursor: pointer;
+    transition: border-color var(--transition-card), box-shadow var(--transition-card);
+    position: relative;
+    display: flex;
+    flex-direction: column;
   }
   .candidate.selected {
-    border-left-color: var(--color-accent-gold);
-    background: var(--color-bg-candidate-selected);
+    border: var(--card-border-selected);
+    box-shadow: var(--card-shadow-selected);
   }
-  .candidate .name {
-    font-weight: bold;
+
+  /* Selected indicator dot — top-right corner, filled circle */
+  .candidate.selected::after {
+    content: '';
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--color-selected);
   }
-  .candidate .skill {
-    color: var(--color-accent-gold-light);
-    font-style: italic;
-    font-size: 0.9em;
+
+  /* ---- Portrait zone ---- */
+  /* Full-figure portrait at top of selection card.
+     Falls back to the inline SVG silhouette if no image src is set. */
+  .candidate-portrait-zone {
+    position: relative;
+    height: var(--portrait-height-full);
+    background: var(--color-card-portrait-bg);
+    overflow: hidden;
+    flex-shrink: 0;
   }
-  .candidate .secondary-skill {
-    color: var(--color-accent-gold-muted);
-    font-style: italic;
-    font-size: 0.78em;
+  .candidate-portrait-zone img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center top;
+    display: block;
   }
-  .candidate .backstory {
-    margin-top: 4px;
-    font-size: 0.85em;
-    color: var(--color-text-muted);
+  /* Silhouette placeholder — shown when no portrait image exists.
+     Inline SVG centered in the portrait zone. */
+  .candidate-portrait-zone .portrait-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
-  .candidate .supplies {
-    margin-top: 6px;
-    font-size: 0.85em;
-    color: var(--color-supplies-text);
+  .candidate-portrait-zone .portrait-placeholder svg {
+    width: 72px;
+    height: 72px;
+    opacity: 0.28;
   }
-  #rerollBtn, #confirmVanguardBtn {
-    margin-top: 14px;
-    padding: 12px 18px;
-    background: var(--color-accent-gold);
-    color: var(--color-bg-page);
+  /* Gradient fade — overlays the bottom of the portrait into the card body */
+  .candidate-portrait-fade {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: var(--portrait-fade-height);
+    background: var(--portrait-fade);
+    pointer-events: none;
+  }
+
+  /* ---- Card body ---- */
+  .candidate-body {
+    padding: var(--card-padding);
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap-xs);
+    flex: 1;
+  }
+
+  /* Name */
+  .candidate .cand-name {
+    font-family: var(--font-display);
+    font-size: var(--text-md);
+    font-weight: 700;
+    color: var(--color-ink-primary);
+    letter-spacing: var(--tracking-wide);
+    margin: 0;
+    line-height: var(--leading-tight);
+  }
+
+  /* Role label */
+  .candidate .cand-role {
+    font-family: var(--font-display);
+    font-size: var(--text-xs);
+    font-weight: 400;
+    color: var(--color-ink-role);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-wider);
+    margin: 0;
+  }
+
+  /* Ink rule divider */
+  .cand-divider {
+    height: 1px;
+    background: var(--divider-ink);
     border: none;
-    font-family: var(--font-body);
-    font-weight: bold;
-    font-size: 1em;
-    cursor: pointer;
+    margin: 4px 0;
   }
-  #rerollBtn:disabled, #confirmVanguardBtn:disabled {
-    background: var(--color-border-default);
-    color: var(--color-text-disabled);
+
+  /* Flavor / backstory text */
+  .candidate .cand-flavor {
+    font-family: var(--font-body-new);
+    font-style: italic;
+    font-size: var(--text-base);
+    color: var(--color-ink-secondary);
+    line-height: var(--leading-base);
+    margin: 0;
+  }
+
+  /* Tier hint line (Practiced / Poor) */
+  .candidate .cand-hints {
+    font-family: var(--font-body-new);
+    font-style: italic;
+    font-size: var(--text-sm);
+    color: var(--color-ink-muted);
+    line-height: var(--leading-base);
+    margin: 0;
+  }
+
+  /* Supplies line */
+  .candidate .cand-supplies {
+    font-family: var(--font-display);
+    font-size: var(--text-xs);
+    color: var(--color-supplies-parchment);
+    letter-spacing: var(--tracking-wide);
+    text-transform: uppercase;
+    margin: 0;
+  }
+
+  /* ---- Selection screen action row ---- */
+  .sel-actions {
+    max-width: 680px;
+    margin: 10px auto 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--gap-md);
+    flex-wrap: wrap;
+  }
+
+  /* Reroll and confirm buttons share structure; confirm is primary. */
+  .sel-btn {
+    font-family: var(--font-display);
+    font-size: var(--text-sm);
+    letter-spacing: var(--tracking-widest);
+    text-transform: uppercase;
+    padding: 11px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: opacity 150ms ease;
+  }
+  .sel-btn:disabled {
+    opacity: 0.38;
     cursor: not-allowed;
   }
-  #rerollCount {
-    margin-left: 10px;
-    color: var(--color-accent-gold-light);
-    font-style: italic;
+  .sel-btn-secondary {
+    background: transparent;
+    border: 1.5px solid var(--color-parchment-deep);
+    color: var(--color-ink-muted);
   }
-  /* Version tag — small, unobtrusive line directly under the game
-     title. Nothing has shipped yet, so this stays a plain subtitle
-     rather than a pinned page footer. */
+  .sel-btn-primary {
+    background: transparent;
+    border: 1.5px solid var(--color-selected);
+    color: var(--color-selected);
+  }
+  .sel-btn-primary:not(:disabled):hover {
+    background: rgba(139,58,47,0.06);
+  }
+  .sel-btn-secondary:not(:disabled):hover {
+    background: rgba(200,184,154,0.18);
+  }
+
+
+  /* Version tag — legacy element, shown only on the game screen.
+     The selection screen renders its own title/version inside #selectionScreen. */
   #versionTag {
     margin-top: -8px;
     margin-bottom: 24px;
@@ -313,6 +576,12 @@
     font-size: 0.75em;
     font-family: var(--font-body);
     text-align: center;
+  }
+  /* Hide the legacy page-level h1 and version tag while selection is visible —
+     the selection screen has its own title block inside it. */
+  body:has(#selectionScreen:not([style*="display: none"])) > h1,
+  body:has(#selectionScreen:not([style*="display: none"])) > #versionTag {
+    display: none;
   }
 
   /* ---------------------------------------------
@@ -330,35 +599,29 @@
     h1 {
       font-size: 1.6em;
     }
+
+    /* Selection screen — single column on narrow viewports */
     #candidatePool {
+      grid-template-columns: 1fr;
+    }
+    .sel-actions {
       flex-direction: column;
+      align-items: center;
     }
-    .candidate {
+    .sel-btn {
       width: 100%;
+      max-width: 320px;
+      text-align: center;
     }
+
+    /* Game screen */
     #resourceSummary {
       flex-direction: column;
       gap: 6px;
     }
-    #rerollBtn {
-      width: 100%;
-      margin-right: 0;
-    }
-    #rerollCount {
-      display: block;
-      margin-left: 0;
-      margin-top: 8px;
-    }
-    #confirmVanguardBtn {
-      width: 100%;
-    }
     select {
       width: 100%;
     }
-    /* In-game roster (post-selection) — same full-width, bigger-tap-target
-       treatment as the candidate screen. .character cards already stack
-       (one per row, block-level div), so the main fix here is sizing
-       within the card, not layout direction. */
     .character {
       padding: 12px;
     }
@@ -385,15 +648,20 @@
 <body>
 
 <h1>Barbarians</h1>
-<div id="versionTag">v0.4.0.0 — prototype, unreleased</div>
+<div id="versionTag">v0.5.0.0</div>
 
 <div id="selectionScreen">
-  <p id="selectionInstructions"></p>
+  <p class="sel-version">v0.5.0.0</p>
+  <div class="sel-header">
+    <p class="sel-title">Barbarians</p>
+    <hr class="sel-rule">
+    <p id="selectionInstructions"></p>
+  </div>
+  <div class="sel-actions">
+    <button id="rerollBtn" class="sel-btn sel-btn-secondary">Reroll Characters</button>
+    <button id="confirmVanguardBtn" class="sel-btn sel-btn-primary" disabled>Confirm Vanguard</button>
+  </div>
   <div id="candidatePool"></div>
-  <button id="rerollBtn">Reroll Remaining Candidates</button>
-  <span id="rerollCount"></span>
-  <br><br>
-  <button id="confirmVanguardBtn" disabled>Confirm Vanguard</button>
 </div>
 
 <div id="gameScreen" style="display: none;">
@@ -840,7 +1108,7 @@ function generateCandidatePool(count) {
 
 // Renders the candidate pool as clickable cards.
 // Turns a candidate's suppliesBrought object into a short readable
-// line for their card, e.g. "Brings: 4 rations"
+// line for their card, e.g. "4 rations"
 function formatSupplies(supplies) {
   const labels = {
     rations: "rations",
@@ -850,7 +1118,31 @@ function formatSupplies(supplies) {
     weapons: "weapons"
   };
   const parts = Object.keys(supplies).map(key => `${supplies[key]} ${labels[key]}`);
-  return `Brings: ${parts.join(", ")}`;
+  return parts.join(", ");
+}
+
+// Silhouette SVG — generic standing figure used as portrait placeholder
+// whenever a character has no portrait image assigned. Defined once here,
+// embedded inline inside each portrait zone that needs it. Any character
+// with a real portrait image will never see this — it only shows when
+// candidate.portraitSrc is null/undefined.
+const SILHOUETTE_SVG = `<svg viewBox="0 0 64 80" xmlns="http://www.w3.org/2000/svg" fill="#3a2f1e">
+  <circle cx="32" cy="14" r="11"/>
+  <path d="M12 72 C12 50 20 42 32 40 C44 42 52 50 52 72 Z"/>
+</svg>`;
+
+// Builds the portrait zone HTML. Uses a real <img> if portraitSrc is set;
+// falls back to the silhouette SVG placeholder otherwise.
+function portraitZoneHTML(portraitSrc) {
+  const inner = portraitSrc
+    ? `<img src="${portraitSrc}" alt="">`
+    : `<div class="portrait-placeholder">${SILHOUETTE_SVG}</div>`;
+  return `
+    <div class="candidate-portrait-zone">
+      ${inner}
+      <div class="candidate-portrait-fade"></div>
+    </div>
+  `;
 }
 
 function renderCandidatePool() {
@@ -861,29 +1153,46 @@ function renderCandidatePool() {
     const isSelected = selectedIds.includes(candidate.id);
     const card = document.createElement("div");
     card.className = isSelected ? "candidate selected" : "candidate";
-    const hintLine = `<div class="secondary-skill">${
-      [candidate.practicedHint ? `Shows an aptitude for ${candidate.practicedHint}.` : "",
-       candidate.poorHint      ? `A poor hand at ${candidate.poorHint}.`             : ""]
-      .filter(Boolean).join(" ")
-    }</div>`;
+
+    // Build tier hint line — Practiced and Poor hints surfaced in italic text.
+    // Each hint is one sentence. Empty if neither hint exists (shouldn't happen
+    // per generateCharacterTiers guarantee, but guard anyway).
+    const hintParts = [
+      candidate.practicedHint ? `Shows an aptitude for ${candidate.practicedHint}.` : "",
+      candidate.poorHint      ? `A poor hand at ${candidate.poorHint}.`             : ""
+    ].filter(Boolean);
+    const hintsHTML = hintParts.length
+      ? `<p class="cand-hints">${hintParts.join(" ")}</p>`
+      : "";
+
     card.innerHTML = `
-      <div class="name">${candidate.name}</div>
-      <div class="skill">${candidate.skill}</div>
-      ${hintLine}
-      <div class="backstory">${candidate.name}, ${candidate.backstory}</div>
-      <div class="supplies">${formatSupplies(candidate.suppliesBrought)}</div>
+      ${portraitZoneHTML(candidate.portraitSrc || null)}
+      <div class="candidate-body">
+        <p class="cand-name">${candidate.name}</p>
+        <p class="cand-role">${candidate.skill}</p>
+        <hr class="cand-divider">
+        <p class="cand-flavor">${candidate.name}, ${candidate.backstory}</p>
+        ${hintsHTML}
+        <p class="cand-supplies">${formatSupplies(candidate.suppliesBrought)}</p>
+      </div>
     `;
     card.addEventListener("click", () => toggleCandidateSelection(candidate.id));
     container.appendChild(card);
   });
 
   document.getElementById("selectionInstructions").textContent =
-    `Choose ${VANGUARD_SIZE} men for the vanguard. Selected: ${selectedIds.length} / ${VANGUARD_SIZE}.`;
+    `Choose 5 men — ${selectedIds.length} of ${VANGUARD_SIZE} selected.`;
 
-  document.getElementById("rerollCount").textContent =
-    `Rerolls remaining: ${rerollsRemaining}`;
+  const rerollBtn = document.getElementById("rerollBtn");
+  if (rerollsRemaining === MAX_REROLLS) {
+    rerollBtn.textContent = "Reroll Characters";
+  } else {
+    rerollBtn.textContent = rerollsRemaining === 1
+      ? `1 Reroll Remaining`
+      : `${rerollsRemaining} Rerolls Remaining`;
+  }
+  rerollBtn.disabled = rerollsRemaining === 0;
 
-  document.getElementById("rerollBtn").disabled = rerollsRemaining === 0;
   document.getElementById("confirmVanguardBtn").disabled = selectedIds.length !== VANGUARD_SIZE;
 }
 
