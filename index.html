@@ -1095,10 +1095,10 @@
 <body>
 
 <h1>Barbarians</h1>
-<div id="versionTag">v0.5.1.0</div>
+<div id="versionTag">v0.5.2.0</div>
 
 <div id="selectionScreen">
-  <p class="sel-version">v0.5.1.0</p>
+  <p class="sel-version">v0.5.2.0</p>
   <div class="sel-header">
     <p class="sel-title">Barbarians</p>
     <hr class="sel-rule">
@@ -1121,7 +1121,7 @@
         <span class="sb-day"></span>
       </div>
       <span class="sb-threat"></span>
-      <span class="sb-version">v0.5.1.0</span>
+      <span class="sb-version">v0.5.2.0</span>
     </div>
     <hr class="game-rule">
     <div id="resourceStrip"></div>
@@ -1182,6 +1182,16 @@ function rollNextWaveDay(fromDay) {
   return fromDay + gap;
 }
 
+// Caravan arrives on a randomly rolled day between 25 and 40 (inclusive).
+// Rolled once at game start and stored in gameState. Surviving to that
+// day is the win condition — fortification state at arrival is irrelevant
+// to victory but affects what kind of camp the caravan finds.
+const CARAVAN_DAY_MIN = 25;
+const CARAVAN_DAY_MAX = 40;
+function rollCaravanArrivalDay() {
+  return CARAVAN_DAY_MIN + Math.floor(Math.random() * (CARAVAN_DAY_MAX - CARAVAN_DAY_MIN + 1));
+}
+
 // ---------------------------------------------
 // GAME STATE
 // This object is the single source of truth.
@@ -1237,7 +1247,10 @@ const gameState = {
   // { id: "rangeTrees", prompt: "...", options: ["rangeFurther", "buildSmaller"] }
 
   gameOver: false,
-  outcome: null, // "victory" (palisade complete) or "defeat" (wiped out / starved) once gameOver is true
+  outcome: null, // "victory" (caravan arrived) or "defeat" (wiped out / starved) once gameOver is true
+  fortificationComplete: false, // true when all stages done mid-run; does NOT end the game
+
+  caravanArrivalDay: rollCaravanArrivalDay(), // rolled once at init; win condition
 
   nextWaveDay: rollNextWaveDay(1), // rerolled after each wave — see rollNextWaveDay
   nextWaveWindow: 3, // max days out a Scout warning can estimate
@@ -2374,6 +2387,19 @@ function resolveBuildPalisade(character) {
     fort.daysRemaining = nextStage ? nextStage.cost - overflow : 0;
     if (nextStage && fort.daysRemaining < 0) fort.daysRemaining = 0;
     fort.hasAnnouncedStart = false; // new stage — "just begun" can fire once more
+
+    // If the new stage costs wood (i.e. we just crossed from earthwork into
+    // a timber stage), charge it now. The wood check at the top of this
+    // function only saw the old stage's woodCost (0), so this transition
+    // day would otherwise be a free first day on the palisade.
+    if (nextStage && nextStage.woodCost > 0) {
+      if (gameState.resources.wood < nextStage.woodCost) {
+        // No timber to start the new stage — freeze progress at stage entry.
+        fort.daysRemaining = nextStage.cost;
+        return `${character.name} finished the groundwork: ${stageJustCompleted.doneLabel}. There was no timber ready to begin the ${nextStage.name.toLowerCase()}.`;
+      }
+      gameState.resources.wood -= nextStage.woodCost;
+    }
   }
 
   if (stageJustCompleted) {
@@ -3120,9 +3146,13 @@ function runDay() {
   gameState.day += 1;
 }
 
-// Checks whether the game has ended — victory if the palisade is
-// fully built, defeat if everyone has died (combat or starvation).
-// Appends a closing log line if either condition is met.
+// Checks whether the game has ended. Two conditions:
+//   Defeat — all characters dead (combat or starvation).
+//   Victory — the caravan arrives on caravanArrivalDay with at least one survivor.
+//
+// Fortification completion is NOT a win condition. If the works are
+// finished before the caravan arrives, a journal entry marks the moment
+// and play continues. The caravan ending is the end of Chapter 1.
 function checkGameOver(entries) {
   const survivors = gameState.characters.filter(c => c.alive).length;
 
@@ -3133,11 +3163,36 @@ function checkGameOver(entries) {
     return;
   }
 
-  if (gameState.fortification.stageIndex >= FORTIFICATION_STAGES.length) {
+  // Mid-run beat: fortification fully complete before caravan arrives.
+  // Fires once — gameState.fortificationComplete guards against repeats.
+  if (
+    !gameState.fortificationComplete &&
+    gameState.fortification.stageIndex >= FORTIFICATION_STAGES.length
+  ) {
+    gameState.fortificationComplete = true;
+    entries.push(
+      "The watchtower was raised before midday. The men stood and looked at what they had made — ditch, bank, stakes, bridgeway, ramparts — and said nothing for a time. There was still the waiting."
+    );
+  }
+
+  // Win condition: caravan arrives.
+  if (gameState.day >= gameState.caravanArrivalDay) {
     gameState.gameOver = true;
     gameState.outcome = "victory";
-    entries.push("The works stand complete, watchtower and all. The camp is secure — the vanguard has held.");
+    const fortNote = gameState.fortificationComplete
+      ? "The works stood ready."
+      : "The works were not yet finished — but the camp had held.";
+    entries.push(
+      `On the ${ordinal(gameState.caravanArrivalDay)} day, dust rose on the road to the south. The caravan had come. ${fortNote}`
+    );
   }
+}
+
+// Returns an ordinal string for a number: 1 → "1st", 25 → "25th", etc.
+function ordinal(n) {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
 
 // One-line status for the resource summary bar. No numbers, no percent
@@ -3274,7 +3329,7 @@ function renderGameOverIfNeeded() {
 
   const banner = document.getElementById("gameOverBanner");
   const outcomeText = gameState.outcome === "victory"
-    ? "VICTORY — The palisade is complete. The vanguard held the ground."
+    ? "THE CARAVAN HAS ARRIVED — The vanguard held until they came."
     : "DEFEAT — The vanguard has fallen.";
   const bannerClass = gameState.outcome === "victory" ? "game-over victory" : "game-over defeat";
 
@@ -3318,3 +3373,4 @@ document.getElementById("journalScreen").addEventListener("click", () => {
 </script>
 </body>
 </html>
+
