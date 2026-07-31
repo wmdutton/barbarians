@@ -1,8 +1,8 @@
 <!--
   Barbarians — Prototype
-  Version: 0.5.1.0
+  Version: 0.5.3.0
   Author: Mason Dutton
-  Last updated: 2026-07-27
+  Last updated: 2026-07-31
 
   Full changelog is kept separately (not in this file); see
   barbarians-changelog.md, attached to the project.
@@ -105,6 +105,7 @@
 
     /* Status */
     --color-supplies-parchment: #5a7a4a;
+    --color-weapon-parchment:   #4f6470;  /* slate — weapon label on selection card */
 
     /* Typography */
     --font-display:   'Spectral SC', Georgia, serif;
@@ -443,11 +444,25 @@
 
 
 
-  /* Supplies line */
+  /* Card footer — supplies left, weapon right, same row */
+  .candidate .cand-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-top: auto;
+  }
   .candidate .cand-supplies {
     font-family: var(--font-display);
     font-size: var(--text-xs);
     color: var(--color-supplies-parchment);
+    letter-spacing: var(--tracking-wide);
+    text-transform: uppercase;
+    margin: 0;
+  }
+  .candidate .cand-weapon {
+    font-family: var(--font-display);
+    font-size: var(--text-xs);
+    color: var(--color-weapon-parchment);
     letter-spacing: var(--tracking-wide);
     text-transform: uppercase;
     margin: 0;
@@ -1095,10 +1110,10 @@
 <body>
 
 <h1>Barbarians</h1>
-<div id="versionTag">v0.5.2.0</div>
+<div id="versionTag">v0.5.3.0</div>
 
 <div id="selectionScreen">
-  <p class="sel-version">v0.5.2.0</p>
+  <p class="sel-version">v0.5.3.0</p>
   <div class="sel-header">
     <p class="sel-title">Barbarians</p>
     <hr class="sel-rule">
@@ -1121,7 +1136,7 @@
         <span class="sb-day"></span>
       </div>
       <span class="sb-threat"></span>
-      <span class="sb-version">v0.5.2.0</span>
+      <span class="sb-version">v0.5.3.0</span>
     </div>
     <hr class="game-rule">
     <div id="resourceStrip"></div>
@@ -1175,11 +1190,82 @@ function rollStartingTrees() {
   return 8 + Math.floor(Math.random() * 3); // 8 to 10
 }
 
-// Rolls which day the next outrider wave arrives (1-3 days out
-// from fromDay). See design-rationale.md for balance reasoning.
-function rollNextWaveDay(fromDay) {
-  const gap = 1 + Math.floor(Math.random() * 3); // 1 to 3 days out
-  return fromDay + gap;
+// ---------------------------------------------
+// THREAT SYSTEM
+// Hidden accumulating value. Player never sees the number.
+// Raids fire when Threat crosses THREAT_RAID_THRESHOLD.
+// Post-raid: partial reset, baseline creeps upward each cycle.
+// ---------------------------------------------
+const THREAT_RAID_THRESHOLD = 30;
+
+// Per-action Threat adds. Fixed adds are flat; outdoor worker adds
+// are rolled across a range so the player cannot game a predictable
+// curve. Tier-governed actions (Hunt/Forage/Scout) are handled
+// in accumulateThreat() using the assigned character's skill tier.
+const THREAT_FIXED = {
+  "Fell timber":    2,  // axes are loud — skill doesn't make you quieter
+  "Delve fosse":    1,  // visible earthwork
+  "Build Palisade": 1,  // visible construction (includes all fortification stages)
+};
+
+// Roll a random integer between min and max inclusive.
+function rollRange(min, max) {
+  return min + Math.floor(Math.random() * (max - min + 1));
+}
+
+// Threat add per character per day for Hunt (Stalk beasts),
+// governed by their Veneur tier.
+function huntThreatAdd(tier) {
+  if (tier === "Seasoned")  return rollRange(0, 1);
+  if (tier === "Practiced") return rollRange(1, 2);
+  if (tier === "Base")      return rollRange(2, 3);
+  return rollRange(3, 4); // Poor
+}
+
+// Threat add for Forage (Gather mast) — one band lower than Hunt.
+function forageThreatAdd(tier) {
+  if (tier === "Seasoned")  return 0;
+  if (tier === "Practiced") return rollRange(0, 1);
+  if (tier === "Base")      return rollRange(1, 2);
+  return rollRange(2, 3); // Poor
+}
+
+// Accumulates Threat for one day based on actions assigned.
+// Returns the total added (for journal use if needed later).
+// Scout detection is handled separately in resolveScoutForEnemiesForDay.
+function accumulateThreat() {
+  // Passive daily increment — the Welsh are always searching.
+  let added = rollRange(1, 2);
+
+  gameState.characters
+    .filter(c => c.alive)
+    .forEach(character => {
+      const action = character.currentAction;
+      if (!action) return;
+
+      if (action === "Stalk beasts") {
+        const tier = getSkillTier(character, "Stalk beasts");
+        added += huntThreatAdd(tier);
+      } else if (action === "Gather mast") {
+        const tier = getSkillTier(character, "Gather mast");
+        added += forageThreatAdd(tier);
+      } else if (THREAT_FIXED[action] !== undefined) {
+        added += THREAT_FIXED[action];
+      }
+      // Cook provisions, Keep ward, Spy out, unassigned: +0
+    });
+
+  gameState.threat += added;
+  return added;
+}
+
+// Called after each raid. Resets Threat to a creeping floor
+// (not zero) so each cycle accelerates slightly.
+// Floor sequence: 8 → 10 → 12 (capped at 12).
+function resetThreatAfterRaid() {
+  const floor = Math.min(12, 8 + (gameState.raidCount * 2));
+  gameState.threat = floor;
+  gameState.raidCount += 1;
 }
 
 // Caravan arrives on a randomly rolled day between 25 and 40 (inclusive).
@@ -1206,8 +1292,7 @@ const gameState = {
     rawFood: 0,     // hunted meat — needs a Master Cook before it's safe/wise to eat
     forageFood: 0,  // foraged food — edible directly, no cooking needed, but spoils fast
     forageFoodAge: 0, // days since the current forage food stock was gathered — spoils at 2
-    wood: 0,        // set by whichever Carpenters the player picks
-    weapons: 0     // set by whichever Soldiers the player picks
+    wood: 0         // set by whichever Carpenters the player picks
   },
 
   // Fortification track — six stages, man-day costs per the design doc.
@@ -1252,9 +1337,20 @@ const gameState = {
 
   caravanArrivalDay: rollCaravanArrivalDay(), // rolled once at init; win condition
 
-  nextWaveDay: rollNextWaveDay(1), // rerolled after each wave — see rollNextWaveDay
-  nextWaveWindow: 3, // max days out a Scout warning can estimate
-  scoutWarning: null // set by resolveScoutForEnemies: { estimatedDays, estimatedCount, accurate }
+  // Threat system — replaces flat nextWaveDay roller (H2).
+  // threat: hidden accumulator; player never sees this number.
+  // raidCount: how many raids have fired this run (drives post-raid reset floor).
+  // raidIsAmbush: true when the incoming raid is forced Ambush
+  //   (either no Watch manned, or scout was detected by the Welsh).
+  // scoutWarning: intel from Spy out — { estimatedDays, estimatedCount,
+  //   daysAccurate, countAccurate }. Cleared after each raid fires.
+  // scoutDetected: true when a scout was seen by the Welsh this day —
+  //   forces next raid to Ambush regardless of Watch.
+  threat: 0,
+  raidCount: 0,
+  raidIsAmbush: false,
+  scoutWarning: null,
+  scoutDetected: false
 
 };
 
@@ -1315,6 +1411,11 @@ const BACKSTORY_POOL = {
     "worked land that belonged to three different lords in one lifetime.",
     "knows soil the way some people know scripture.",
     "buried two children before turning twenty and rarely speaks of either."
+  ],
+  Outrider: [
+    "was sent ahead of columns more times than he can count, and came back every one.",
+    "knows the Welsh Marches better than he knows his own village — the ground is his trade.",
+    "moves through country like water through stone, and prefers it that way."
   ]
 };
 
@@ -1407,6 +1508,18 @@ const HINT_POOL = {
       "Earthwork wears him out faster than it should — he has not found the rhythm of it.",
       "He works hard at the ditch but cannot seem to make the soil do what he wants."
     ]
+  },
+  Outrider: {
+    Practiced: [
+      "He can move quietly when he needs to — not trained to it, but instinct has carried him this far.",
+      "He knows enough of ground-reading to stay out of trouble on familiar terrain.",
+      "He has done enough rough travel to know when to move and when to go still."
+    ],
+    Poor: [
+      "He is not built for quiet work — he moves like a man accustomed to roads, not woodland.",
+      "The open country unnerves him; he reads it poorly and knows it.",
+      "He lacks the patience for this kind of work and the land does not forgive impatience."
+    ]
   }
 };
 
@@ -1418,14 +1531,11 @@ function pickHint(role, tier) {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
-// Active vanguard skill pool — 7 live roles per the locked
-// Skill-Weight Model (barbarians-design-doc-characters-20260721.md).
-// Outrider and Woodward are tabled (blocked on Threat and the
-// Founding Sequence respectively — see design doc). Farmer exists
-// in BACKSTORY_POOL but is intentionally excluded here.
-// Laborer is retired outright, not renamed — see design-rationale.md
-// (Laborer section) for why the generalist-fallback role was cut.
-const ALL_SKILLS = ["Carpenter", "Veneur", "Master Cook", "Man-at-Arms", "Gatherer", "Hewer", "Fossier"];
+// Active vanguard skill pool — 8 live roles as of H2. Outrider
+// unlocked alongside Threat system (H2). Woodward remains tabled
+// (blocked on Founding Sequence). Farmer exists in BACKSTORY_POOL
+// but is excluded here. Laborer is retired outright — see design-rationale.md.
+const ALL_SKILLS = ["Carpenter", "Veneur", "Master Cook", "Man-at-Arms", "Gatherer", "Hewer", "Fossier", "Outrider"];
 
 // The actions a settler can be assigned to for the day.
 // No action is skill-gated — any settler can attempt any action.
@@ -1596,10 +1706,11 @@ function rollStartingSupplies(skill) {
     "Master Cook": { rations: [3, 6] },
     Veneur: { rawFood: [2, 5] },
     Carpenter: { wood: [2, 5] },
-    "Man-at-Arms": { weapons: [1, 3] },
+    "Man-at-Arms": { rations: [1, 3] },
     Gatherer: { forageFood: [2, 4] },
     Hewer: { wood: [1, 3] },
-    Fossier: { rations: [1, 3] }
+    Fossier: { rations: [1, 3] },
+    Outrider: { rations: [1, 2] }
   };
 
   const ranges = supplyRanges[skill] || {};
@@ -1633,6 +1744,16 @@ function createSettler(name) {
   const poorSentence      = poorHint      ? pickHint(poorHint, "Poor")           : null;
 
 
+  // Personal weapon — governed by Stalk beasts tier (keyed as "Veneur"
+  // in the tiers map — see SKILL_FOR_ACTION). Seasoned or Practiced → Bow.
+  // Base or Poor → Spear. Man-at-Arms always Sword regardless.
+  const stalkTier = tiers["Veneur"];
+  const weapon = headlineRole === "Man-at-Arms"
+    ? "sword+saex"
+    : (stalkTier === "Seasoned" || stalkTier === "Practiced")
+      ? "bow+saex"
+      : "spear+saex";
+
   return {
     id: name.toLowerCase(),
     name: name,
@@ -1648,7 +1769,7 @@ function createSettler(name) {
     position: "campsite",
     suppliesBrought: rollStartingSupplies(headlineRole),
     daysWithoutFood: 0,
-    armed: true
+    weapon                       // personal weapon — "sword+saex" or "spear+saex"
   };
 }
 
@@ -1729,8 +1850,7 @@ function formatSupplies(supplies) {
     rations: "rations",
     rawFood: "raw food",
     forageFood: "forage food",
-    wood: "wood",
-    weapons: "weapons"
+    wood: "wood"
   };
   const parts = Object.keys(supplies).map(key => `${supplies[key]} ${labels[key]}`);
   return parts.join(", ");
@@ -1760,6 +1880,13 @@ function portraitZoneHTML(portraitSrc) {
   `;
 }
 
+// Human-readable weapon label for display.
+function weaponDisplayLabel(weapon) {
+  if (weapon === "sword+saex") return "Sword";
+  if (weapon === "bow+saex")   return "Bow";
+  return "Spear";
+}
+
 function renderCandidatePool() {
   const container = document.getElementById("candidatePool");
   container.innerHTML = "";
@@ -1781,7 +1908,10 @@ function renderCandidatePool() {
         <p class="cand-role">${candidate.skill}</p>
         <hr class="cand-divider">
         <p class="cand-flavor">${flavorText}</p>
-        <p class="cand-supplies">${formatSupplies(candidate.suppliesBrought)}</p>
+        <div class="cand-footer">
+          <p class="cand-supplies">${formatSupplies(candidate.suppliesBrought)}</p>
+          <p class="cand-weapon">${weaponDisplayLabel(candidate.weapon)}</p>
+        </div>
       </div>
     `;
     card.addEventListener("click", () => toggleCandidateSelection(candidate.id));
@@ -2648,101 +2778,121 @@ function resolveForage(character) {
   return flavor[qualityTier];
 }
 
-// Scout: Veneur and Man-at-Arms each estimate different stats (days vs.
-// count) with different accuracy; both present on the same day is a
-// "combo" that guarantees an accurate reading. Runs once per day
-// (not per-character) — see resolveScoutForEnemiesForDay, called
-// from runDay(). Full reasoning in design-rationale.md.
-//
-// NOTE: Scout's Veneur/Man-at-Arms accuracy split is its own existing
-// mechanic and is intentionally NOT run through getSkillTier()/the
-// new Primary/Secondary tiers in this pass — see chat notes. It
-// still only checks character.skill directly (Primary), same as
-// before.
+// ---------------------------------------------
+// SCOUT / SPY OUT RESOLUTION (H2 — Threat-aware)
+// Two independent rolls per scout: Detection and Intelligence.
+// Detection: did the Welsh see them? Governed by Spy out tier.
+//   Outrider: never detected.
+//   Detected scouts spike Threat AND force next raid to Ambush —
+//   but only if the scout also saw the Welsh (he only knows he was
+//   seen if he saw them too).
+// Intelligence: what did the scout observe? d20 field-reality roll
+//   modified by tier. Band: Nothing / Cold / Warm / Direct.
+// Runs once per day for all scouts together.
+// ---------------------------------------------
 
-// Rolls one estimate (count or days). Returns the true value if
-// accurate, otherwise a plausible-but-wrong value (over or under).
-function rollEstimate(trueValue, accuracyChance, maxSpread) {
-  if (Math.random() < accuracyChance) {
-    return { value: trueValue, accurate: true };
-  }
-  const error = 1 + Math.floor(Math.random() * maxSpread);
-  const direction = Math.random() < 0.5 ? -1 : 1;
-  const wrongValue = Math.max(1, trueValue + (error * direction));
-  return { value: wrongValue, accurate: false };
+// Intelligence band labels — used in journal voice lines.
+const INTEL_BANDS = ["nothing", "cold", "warm", "direct"];
+
+// Roll the raw field-reality d20 and return a band index (0–3).
+function rollFieldReality() {
+  const d20 = rollRange(1, 20);
+  if (d20 <= 8)  return 0; // Nothing
+  if (d20 <= 14) return 1; // Cold trail
+  if (d20 <= 18) return 2; // Warm trail
+  return 3;                 // Direct observation
 }
 
-// Resolves Scout for the whole day at once. Man-at-Arms and Veneur are
-// both valid solo scouts now (see SECONDARY_PRIMARY_TASK_SKILLS) —
-// neither requires the other. Sending both together is a bonus
-// (guaranteed accurate read), not a requirement to get any read at
-// all. This matters for a food-scarce game: a player who always
-// needs their Veneur hunting shouldn't be locked out of a working
-// Scout — Man-at-Arms alone covers it.
+// Apply skill multiplier — shifts band up or down.
+// Never turns Nothing into something; never exceeds Direct.
+function applyIntelMultiplier(rawBand, tier) {
+  if (rawBand === 0) return 0; // Nothing stays Nothing regardless
+  if (tier === "Seasoned")  return Math.min(3, rawBand + 1); // Outrider: reads one band higher
+  if (tier === "Practiced") return rawBand;                  // accurate most of the time
+  if (tier === "Base")      return rawBand;                  // exact read
+  return Math.max(1, rawBand - 1);                           // Poor: reads one band lower (min Cold)
+}
+
+// Detection roll: did the Welsh notice this scout?
+// Returns { detected, threatAdd }.
+// Outrider: never detected. Others governed by Spy out tier.
+function rollDetection(tier) {
+  if (tier === "Seasoned") return { detected: false, threatAdd: 0 }; // Outrider — never seen
+  if (tier === "Practiced") {
+    const add = rollRange(0, 1);
+    return { detected: add > 0, threatAdd: add };
+  }
+  if (tier === "Base") {
+    const add = rollRange(3, 5);
+    return { detected: true, threatAdd: add };
+  }
+  // Poor
+  const add = rollRange(5, 8);
+  return { detected: true, threatAdd: add };
+}
+
+// Journal voice per intelligence band.
+function intelJournalLine(character, band) {
+  const n = character.name;
+  if (band === 0) return `${n} came back before dark. Nothing out there he could say for certain.`;
+  if (band === 1) return `${n} found an old fire, days dead. Someone has been through this ground.`;
+  if (band === 2) return `${n} found a fresh camp, half a day's march off. They are not far.`;
+  // Direct — Outrider adds timing estimate
+  if (character.skill === "Outrider") {
+    // Outrider produces a day-range estimate from Threat gap
+    const gap = THREAT_RAID_THRESHOLD - gameState.threat;
+    const maxDaily = 3 + 3 + 3 + 2; // worst-case single day (passive max + Hunt max + Forage max + timber)
+    const minDaily = 2;              // passive only, quiet day
+    const floorDays = Math.max(1, Math.floor(gap / maxDaily));
+    const ceilDays  = Math.max(floorDays, Math.ceil(gap / minDaily));
+    const timing = floorDays === ceilDays
+      ? `${floorDays} day${floorDays === 1 ? "" : "s"} at the least`
+      : `${floorDays} to ${ceilDays} days`;
+    return `${n} saw them — moving light, no baggage. ${timing} out, less if the men keep making noise.`;
+  }
+  return `${n} saw them. Moving light, no baggage.`;
+}
+
+// Resolves Spy out for all scouts assigned this day.
+// Accumulates detection Threat spikes and sets scoutDetected flag
+// if applicable. Updates gameState.scoutWarning with best intel found.
 function resolveScoutForEnemiesForDay(scoutingCharacters) {
   if (scoutingCharacters.length === 0) return [];
 
-  const daysUntilWave = gameState.nextWaveDay - gameState.day;
-  const forecastCount = 3 + Math.floor(Math.random() * 3); // matches rollOutriderCount's range
-
-  const hasHunter = scoutingCharacters.some(c => c.skill === "Veneur");
-  const hasSoldier = scoutingCharacters.some(c => c.skill === "Man-at-Arms");
-  const comboActive = hasHunter && hasSoldier;
-
   const entries = [];
+  let bestBand = -1; // track the best intel result across all scouts this day
 
-  if (comboActive) {
-    gameState.scoutWarning = {
-      estimatedDays: daysUntilWave, daysAccurate: true,
-      estimatedCount: forecastCount, countAccurate: true
-    };
-    entries.push(`A raiding party is out there, and this time there's no doubt about it — between tracking and trained instinct, the Veneur and Man-at-Arms together confirmed ${forecastCount} outriders, ${daysUntilWave} day(s) out. Sending both on the same scout was a good call.`);
-    return entries;
-  }
-
-  // No combo — each scout on the task contributes their own estimate.
-  // Flavor text describes what THIS specific roll actually landed on,
-  // not a fixed hedge — so the log never contradicts the resource bar.
   scoutingCharacters.forEach(character => {
-    const isHunter = character.skill === "Veneur";
-    const isSoldier = character.skill === "Man-at-Arms";
+    const spyTier = getSkillTier(character, "Spy out");
 
-    const daysAccuracy = isHunter ? 0.8 : (isSoldier ? 0.6 : 0.3);
-    const countAccuracy = isSoldier ? 0.8 : (isHunter ? 0.45 : 0.3);
-    // Man-at-Arms's day-estimate miss is capped at "off by one" (maxSpread
-    // 1) rather than the wider miss everyone else risks (maxSpread 2)
-    // — a soldier reading enemy movement judges timing closely even
-    // when he's not dead-on. Everyone else keeps the wider miss.
-    const daysMaxSpread = isSoldier ? 1 : 2;
-
-    const daysEstimate = rollEstimate(daysUntilWave, daysAccuracy, daysMaxSpread);
-    const countEstimate = rollEstimate(forecastCount, countAccuracy, 2);
-
-    gameState.scoutWarning = {
-      estimatedDays: daysEstimate.value, daysAccurate: daysEstimate.accurate,
-      estimatedCount: countEstimate.value, countAccurate: countEstimate.accurate
-    };
-
-    // Each stat gets its own confident/uncertain phrasing, kept as
-    // explicit pairs rather than patched strings — easier to read,
-    // easier to extend later.
-    const confidentDays = `confident it's ${daysEstimate.value} day(s) before they show`;
-    const uncertainDays = `couldn't pin down how soon they'll arrive, but it won't be far off`;
-    const confidentCount = `certain there are ${countEstimate.value} of them`;
-    const uncertainCount = `couldn't get a solid count`;
-
-    if (isHunter) {
-      const days = daysEstimate.accurate ? confidentDays : uncertainDays;
-      const count = countEstimate.accurate ? "though the exact number's hard to judge from sign alone" : "and the size of the group is anyone's guess";
-      entries.push(`${character.name} found signs of a raiding party moving through the country — ${days}, ${count}.`);
-    } else if (isSoldier) {
-      const count = countEstimate.accurate ? confidentCount : uncertainCount;
-      const days = daysEstimate.accurate ? "and it looks like it'll be soon" : "though he'd stake his read within a day either way";
-      entries.push(`${character.name} spotted a raiding party and sized them up — ${count}, ${days}.`);
-    } else {
-      entries.push(`${character.name} scouted for signs of trouble but has no real training for this — whatever he saw, the read is little better than a guess.`);
+    // Detection roll
+    const detection = rollDetection(spyTier);
+    if (detection.detected) {
+      gameState.threat += detection.threatAdd;
     }
+
+    // Intelligence roll
+    const rawBand = rollFieldReality();
+    const perceivedBand = applyIntelMultiplier(rawBand, spyTier);
+
+    // Scout only reports being seen if he also saw the Welsh (warm+).
+    // A Poor scout who got burned but came back with Nothing doesn't
+    // know he was compromised — the Ambush arrives without warning.
+    if (detection.detected && perceivedBand >= 2) {
+      gameState.scoutDetected = true;
+      entries.push(`${character.name} came back unsettled — he saw them, and he is not certain they did not see him.`);
+    }
+
+    // Journal line for what the scout observed
+    entries.push(intelJournalLine(character, perceivedBand));
+
+    if (perceivedBand > bestBand) bestBand = perceivedBand;
   });
+
+  // Store scout warning for status bar display (warm+ intel only)
+  if (bestBand >= 2) {
+    gameState.scoutWarning = { band: bestBand };
+  }
 
   return entries;
 }
@@ -2871,25 +3021,16 @@ function rollOutriderCount() {
   return 3 + Math.floor(Math.random() * 3); // 3 to 5
 }
 
-// Returns how many outriders the vanguard drove off. Weapons cap
-// the damage dealt; whoever's on Watch adds a bonus, bigger if
-// that watcher is Man-at-Arms-primary-tier. Weapons no longer have any
-// chance of being lost from use — they're durable equipment (matches
-// the stated intent in design-rationale.md that was previously
-// contradicted by a 20%-per-use loss roll). The ONLY way weapons
-// now leave the camp is theft during a raid where the camp was
-// caught vulnerable — see resolveResourceRisk.
+// Returns how many outriders the vanguard drove off.
+// Each living armed character can engage one outrider.
+// Man-at-Arms on Watch adds +3; anyone else on Watch adds +1.
+// Ambush penalty (−3) is applied by the caller, not here.
 function resolveFightBack(outriderCount, anyWatcher, soldierWatching) {
-  const weapons = gameState.resources.weapons;
-  if (weapons === 0) {
-    return 0; // nothing to fight back with — the camp can only endure
-  }
+  const armedCount = gameState.characters.filter(c => c.alive && c.weapon).length;
+  if (armedCount === 0) return 0;
 
-  // Man-at-Arms-on-Watch: +3. Anyone else on Watch: +1. No watcher: +0.
   const watchBonus = soldierWatching ? 3 : (anyWatcher ? 1 : 0);
-  const weaponsAvailable = Math.min(weapons, outriderCount);
-  const driven = Math.min(outriderCount, weaponsAvailable + watchBonus);
-
+  const driven = Math.min(outriderCount, armedCount + watchBonus);
   return driven;
 }
 
@@ -2975,10 +3116,9 @@ function resolveResourceRisk(anyWatcher) {
   const takenNotes = [];
 
   const lootOrder = [
-    { key: "weapons", label: "weapons" },
-    { key: "rations", label: "rations" },
+    { key: "rations",    label: "rations" },
     { key: "forageFood", label: "portions of foraged food" },
-    { key: "rawFood", label: "portions of raw food" }
+    { key: "rawFood",    label: "portions of raw food" }
   ];
 
   lootOrder.forEach(resource => {
@@ -3010,35 +3150,30 @@ const OUTDOOR_ACTIONS = ["Stalk beasts", "Gather mast", "Spy out", "Fell timber"
 // Resolves the scout wave: outriders arrive, the vanguard fights
 // back if armed, casualties and resource losses are applied, and
 // the whole encounter is logged like a report reaching the player.
+// Warned vs. Ambush is determined by gameState.raidIsAmbush, set
+// in runDay() before this is called.
 function resolveScoutWave() {
   const entries = [];
+  const isAmbush = gameState.raidIsAmbush;
   const anyWatcher = watchPresent();
   const soldierWatching = soldierOnWatch();
   const outriderCount = rollOutriderCount();
 
-  entries.push(`${outriderCount} outriders were spotted moving through the treeline as the sun dropped.`);
-
-  if (soldierWatching) {
-    entries.push("The soldier on watch caught sight of them early and had the camp braced before they closed the distance.");
-  } else if (anyWatcher) {
-    entries.push("The watch caught sight of them early, giving the camp a chance to brace.");
+  // Opening line differs by raid type.
+  if (isAmbush) {
+    entries.push(`They were upon the camp before anyone raised the alarm — ${outriderCount} outriders, out of the dusk without warning.`);
   } else {
-    entries.push("No one was watching the perimeter — they closed in unseen.");
+    entries.push(`${outriderCount} outriders were spotted moving through the treeline as the sun dropped.`);
+    if (soldierWatching) {
+      entries.push("The soldier on watch caught sight of them early and had the camp braced before they closed the distance.");
+    } else {
+      entries.push("The watch caught sight of them early, giving the camp a chance to brace.");
+    }
   }
 
-  const driven = resolveFightBack(outriderCount, anyWatcher, soldierWatching);
-  // Updated 2026-07-21: no longer floors outridersRemaining at 1. The
-  // old Math.max(1, ...) meant that driving off ALL attackers still
-  // left 1 "remaining" internally for pressureRatio's math — which
-  // silently contradicted the log line saying every attacker was
-  // driven off. That's the root of the "5 outriders approached, only
-  // 4 driven off, what happened to the 5th?" bug: the 5th wasn't
-  // unaccounted for in the text, but the internal math was quietly
-  // treating it as still out there. outridersRemaining can now
-  // legitimately reach 0, and pressureRatio (outridersRemaining /
-  // originalCount) correctly zeroes out remaining danger to anyone
-  // not already resolved above — no attackers left means no attackers
-  // left, full stop.
+  // Ambush penalty: −3 applied to driven count (the vanguard can't
+  // coordinate their response when caught unprepared). Floored at 0.
+  const driven = Math.max(0, resolveFightBack(outriderCount, anyWatcher, soldierWatching) - (isAmbush ? 3 : 0));
   const outridersRemaining = Math.max(0, outriderCount - driven);
   const allDrivenOff = driven >= outriderCount;
 
@@ -3046,8 +3181,6 @@ function resolveScoutWave() {
     entries.push(`The vanguard fought back and drove off all ${driven} of them — the raid was repelled outright.`);
   } else if (driven > 0) {
     entries.push(`The vanguard fought back and drove off ${driven} of them.`);
-  } else if (gameState.resources.weapons === 0) {
-    entries.push("With no weapons on hand, the camp could do nothing but endure the raid.");
   }
 
   let warnedAnyone = false;
@@ -3056,26 +3189,24 @@ function resolveScoutWave() {
     .filter(c => c.alive)
     .forEach(character => {
       const isOutdoors = OUTDOOR_ACTIONS.includes(character.currentAction);
-      // Warned: was outside camp, but a manned Watch (any watcher)
-      // called them back before the raid landed. They still face
-      // some risk — running back in the dark isn't free — but they
-      // are never an automatic kill, and their odds match an
-      // unwatched-in-camp character rather than someone caught fully
-      // in the open.
-      const warned = isOutdoors && anyWatcher;
-      // Caught fully in the open: was outside camp AND no one was
-      // watching to call them back.
-      const caughtInOpen = isOutdoors && !anyWatcher;
+      // Warned: outside camp, but Watch called them back before the raid
+      // landed. Only possible in a Warned raid — Ambush means no one had
+      // time to raise the alarm, so outdoor workers are caught regardless
+      // of whether Watch was manned.
+      const warned = isOutdoors && anyWatcher && !isAmbush;
+      // Caught fully in the open: outside AND either no watcher OR Ambush.
+      const caughtInOpen = isOutdoors && !warned;
 
       if (warned) warnedAnyone = true;
 
-      // TODO: checks the shared weapons pool, not per-character
-      // ownership. See "Known Prototype Shortcuts" in design-rationale.md.
-      const noWeaponsAtAll = gameState.resources.weapons === 0;
+      // Per-character weapon check — each man carries his own weapon.
+      // weapon property set at generation ("sword+saex" or "spear+saex").
+      // Unarmed only if weapon was somehow stripped (future mechanic).
+      const unarmed = !character.weapon;
 
-      if (caughtInOpen && noWeaponsAtAll) {
+      if (caughtInOpen && unarmed) {
         character.alive = false;
-        entries.push(`${character.name} was caught in the open with nothing to defend himself — he did not survive the night.`);
+        entries.push(`${character.name} was caught in the open with nothing to defend himself — he did not survive.`);
         return;
       }
 
@@ -3113,6 +3244,9 @@ function resolveScoutWave() {
 function runDay() {
   const entries = [];
 
+  // Reset per-day flags before any resolution runs.
+  gameState.scoutDetected = false;
+
   const scoutingCharacters = gameState.characters.filter(
     c => c.alive && c.currentAction === "Spy out"
   );
@@ -3133,10 +3267,23 @@ function runDay() {
   const starvationNotes = checkStarvation();
   entries.push(...starvationNotes);
 
-  if (gameState.day === gameState.nextWaveDay) {
+  // Accumulate Threat from today's actions (passive + per-action adds).
+  // Must run after all actions resolve so assignments are final.
+  accumulateThreat();
+
+  // Determine raid type before resolveScoutWave runs.
+  // Ambush if: no Watch manned, OR a scout was detected today.
+  // scoutDetected is cleared each day before action resolution
+  // (reset happens at top of runDay — see above). Watch check uses
+  // watchPresent() which reads currentAction, so assignments are final.
+  const watchManned = watchPresent();
+  gameState.raidIsAmbush = !watchManned || gameState.scoutDetected;
+
+  if (gameState.threat >= THREAT_RAID_THRESHOLD) {
     entries.push(...resolveScoutWave());
-    gameState.nextWaveDay = rollNextWaveDay(gameState.day);
-    gameState.scoutWarning = null; // any warning was for this wave; clear it
+    resetThreatAfterRaid();
+    gameState.scoutWarning = null;
+    gameState.scoutDetected = false;
   }
 
   gameState.log.push({ day: gameState.day, entries: entries });
@@ -3230,17 +3377,22 @@ function renderResources() {
   // Status bar
   document.querySelector("#statusBar .sb-day").textContent = `Day ${gameState.day}`;
 
-  // Threat word — placeholder until the Threat system (Horizon 2) is built.
-  // Show scout warning in that slot if one exists; otherwise blank.
+  // Threat mood phrase — hidden number, visible signal.
+  // Ambient phrase appears once Threat crosses ~60% of threshold.
+  // Scout intel (warm+) appends a short field note.
+  // No number ever shown; no "raid imminent" label.
   const threatEl = document.querySelector("#statusBar .sb-threat");
-  if (gameState.scoutWarning) {
-    const w = gameState.scoutWarning;
-    const countText = w.countAccurate ? `${w.estimatedCount} outriders` : "outriders coming";
-    const daysText = w.daysAccurate ? `, ${w.estimatedDays} day${w.estimatedDays === 1 ? "" : "s"} out` : "";
-    threatEl.textContent = `${countText}${daysText}`;
-  } else {
-    threatEl.textContent = "";
+  const threatRatio = gameState.threat / THREAT_RAID_THRESHOLD;
+  let threatText = "";
+  if (threatRatio >= 0.6) {
+    threatText = "The men are uneasy.";
   }
+  if (gameState.scoutWarning) {
+    const band = gameState.scoutWarning.band;
+    const intelNote = band >= 3 ? " They have been seen." : " Someone has been through this ground.";
+    threatText = (threatText || "The men are uneasy.") + intelNote;
+  }
+  threatEl.textContent = threatText;
 
   // Resource strip — text stub (icon art pending)
   const resources = [
@@ -3248,7 +3400,6 @@ function renderResources() {
     { label: "Raw food",   count: r.rawFood },
     { label: "Forage",     count: r.forageFood },
     { label: "Wood",       count: r.wood },
-    { label: "Weapons",    count: r.weapons },
     { label: "Trees",      count: e.treesRemainingNearby }
   ];
   document.getElementById("resourceStrip").innerHTML = resources
