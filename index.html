@@ -1,6 +1,6 @@
 <!--
   Barbarians — Prototype
-  Version: 0.5.3.0
+  Version: 0.5.4.0
   Author: Mason Dutton
   Last updated: 2026-07-31
 
@@ -113,12 +113,12 @@
     --font-numeric:   'Trebuchet MS', Arial, sans-serif;
 
     /* Type sizes */
-    --text-xs:   8px;
-    --text-sm:   9px;
-    --text-base: 9.5px;
-    --text-md:   11px;
-    --text-lg:   13px;
-    --text-xl:   16px;
+    --text-xs:   10px;
+    --text-sm:   11px;
+    --text-base: 12px;
+    --text-md:   13px;
+    --text-lg:   15px;
+    --text-xl:   18px;
 
     /* Leading */
     --leading-tight: 1.2;
@@ -167,19 +167,25 @@
     --color-slot-empty-bg:    #e8dbc6;
 
     /* Character decay arc — card backgrounds */
-    --color-card-hungry-bg:   #ddd8cc;
-    --color-card-starving-bg: #c4beb4;
-    --color-card-dead-bg:     #c0bcb4;
+    --color-card-hungry-bg:       #ddd8cc;
+    --color-card-starving-bg:     #c4beb4;
+    --color-card-dead-bg:         #c0bcb4;
+    --color-card-hurt-bg:         #ede0cc;
+    --color-card-sorely-hurt-bg:  #e8d0bc;
 
     /* Character decay arc — card borders */
-    --color-card-hungry-border:   #9a9080;
-    --color-card-starving-border: #706860;
-    --color-card-dead-border:     #888880;
+    --color-card-hungry-border:       #9a9080;
+    --color-card-starving-border:     #706860;
+    --color-card-dead-border:         #888880;
+    --color-card-hurt-border:         #b89060;
+    --color-card-sorely-hurt-border:  #a06040;
 
     /* Character decay arc — state word colors */
-    --color-state-hungry:   #7a6848;
-    --color-state-starving: #4a3e30;
-    --color-state-dead:     #555555;
+    --color-state-hungry:      #7a6848;
+    --color-state-starving:    #4a3e30;
+    --color-state-dead:        #555555;
+    --color-state-hurt:        #8a5a20;
+    --color-state-sorely-hurt: #7a2e10;
 
     /* Start Day button */
     --btn-start-radius: 8px;
@@ -280,7 +286,7 @@
     right: 18px;
     font-family: var(--font-display);
     font-size: 7px;
-    color: var(--color-ink-ornament);
+    color: var(--color-ink-primary);
     letter-spacing: var(--tracking-wide);
     opacity: 0.6;
     margin: 0;
@@ -609,7 +615,7 @@
   #statusBar .sb-version {
     font-family: var(--font-display);
     font-size: 7px;
-    color: var(--color-ink-ornament);
+    color: var(--color-ink-primary);
     text-transform: uppercase;
     letter-spacing: var(--tracking-wide);
     opacity: 0.6;
@@ -861,6 +867,28 @@
     cursor: default;
   }
 
+  /* Injury state classes — amber/rust tint, distinct from hunger desaturation */
+  .char-card.hurt {
+    background: var(--color-card-hurt-bg);
+    border-color: var(--color-card-hurt-border);
+  }
+  .char-card.sorely-hurt {
+    background: var(--color-card-sorely-hurt-bg);
+    border-color: var(--color-card-sorely-hurt-border);
+  }
+
+  /* Locked action slot — Sorely Hurt characters cannot be assigned */
+  .action-slot.locked {
+    background: var(--color-slot-empty-bg);
+    opacity: 0.38;
+    cursor: not-allowed;
+  }
+  .action-slot-lock-icon {
+    width: 14px;
+    height: 14px;
+    opacity: 0.4;
+  }
+
   /* ---- Action Tray (§4) ---- */
   /* Fixed bottom sheet — sits above Start Day button when open.
      Hidden by default; JS adds .tray-open to body when active. */
@@ -1110,10 +1138,10 @@
 <body>
 
 <h1>Barbarians</h1>
-<div id="versionTag">v0.5.3.0</div>
+<div id="versionTag">v0.5.4.0</div>
 
 <div id="selectionScreen">
-  <p class="sel-version">v0.5.3.0</p>
+  <p class="sel-version">v0.5.4.0</p>
   <div class="sel-header">
     <p class="sel-title">Barbarians</p>
     <hr class="sel-rule">
@@ -1136,7 +1164,7 @@
         <span class="sb-day"></span>
       </div>
       <span class="sb-threat"></span>
-      <span class="sb-version">v0.5.3.0</span>
+      <span class="sb-version">v0.5.4.0</span>
     </div>
     <hr class="game-rule">
     <div id="resourceStrip"></div>
@@ -1292,7 +1320,8 @@ const gameState = {
     rawFood: 0,     // hunted meat — needs a Master Cook before it's safe/wise to eat
     forageFood: 0,  // foraged food — edible directly, no cooking needed, but spoils fast
     forageFoodAge: 0, // days since the current forage food stock was gathered — spoils at 2
-    wood: 0         // set by whichever Carpenters the player picks
+    wood: 0,        // set by whichever Carpenters the player picks
+    simples: 0      // medicinal herbs; byproduct of Gather mast; auto-applied to Hurt characters
   },
 
   // Fortification track — six stages, man-day costs per the design doc.
@@ -1540,7 +1569,8 @@ const ALL_SKILLS = ["Carpenter", "Veneur", "Master Cook", "Man-at-Arms", "Gather
 // The actions a settler can be assigned to for the day.
 // No action is skill-gated — any settler can attempt any action.
 // Skill only affects how well they do it (see resolve* functions).
-const ACTION_POOL = ["Fell timber", "Build Palisade", "Stalk beasts", "Cook provisions", "Keep ward", "Gather mast", "Spy out"];
+// "Tend wounds" is a consequential action — Poor tier carries worsening risk (see resolveTendWounds).
+const ACTION_POOL = ["Fell timber", "Build Palisade", "Stalk beasts", "Cook provisions", "Keep ward", "Gather mast", "Spy out", "Tend wounds"];
 
 // Player-facing label for the Build Palisade action in the assignment
 // dropdown. "Build Palisade" stays as the internal action id (it's what
@@ -1769,7 +1799,11 @@ function createSettler(name) {
     position: "campsite",
     suppliesBrought: rollStartingSupplies(headlineRole),
     daysWithoutFood: 0,
-    weapon                       // personal weapon — "sword+saex" or "spear+saex"
+    weapon,                      // personal weapon — "sword+saex" or "spear+saex"
+    // Injury arc — null = healthy; "hurt" = working but risky; "sorelyHurt" = cannot act
+    injuryState: null,
+    daysSinceTending: 0,         // Sorely Hurt death clock: 3 days untended → death
+    tendingDaysAccumulated: 0    // days of Tend wounds received; 2 → step down one injury tier
   };
 }
 
@@ -2028,13 +2062,14 @@ function applyStartingSupplies(chosenCharacters) {
 // These functions only read gameState — they never modify it.
 // ---------------------------------------------
 
-// Maps a hunger state name to its CSS color variable value.
-// Used inline on the state word span rather than as a class,
-// since the decay filter is applied to the whole card and color
-// needs to be set before the filter desaturates it.
+// Maps a character state name to its CSS color variable value.
+// Used inline on the state word span. Injury states use a separate
+// amber/rust palette so they're visually distinct from hunger desaturation.
 const STATE_WORD_COLORS = {
-  hungry:   "var(--color-state-hungry)",
-  starving: "var(--color-state-starving)"
+  hungry:      "var(--color-state-hungry)",
+  starving:    "var(--color-state-starving)",
+  hurt:        "var(--color-state-hurt)",
+  sorelyHurt:  "var(--color-state-sorely-hurt)"
 };
 
 // Builds the face-crop portrait zone for a game screen card.
@@ -2048,7 +2083,16 @@ function faceCropHTML(portraitSrc) {
 
 // Builds the action slot for a character.
 // Empty = tappable well; assigned = shows abbreviated action label.
+// Locked = Sorely Hurt character cannot be assigned any action.
 function actionSlotHTML(character) {
+  if (character.injuryState === "sorelyHurt") {
+    return `
+      <div class="action-slot locked" data-character-id="${character.id}" title="Cannot act — sorely hurt">
+        <svg class="action-slot-lock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+        </svg>
+      </div>`;
+  }
   if (!character.currentAction) {
     return `
       <div class="action-slot empty" data-character-id="${character.id}" title="Assign action">
@@ -2073,16 +2117,31 @@ function renderRoster() {
   gameState.characters.forEach(character => {
     const card = document.createElement("div");
     const hunger = hungerStage(character);
+    const injury = character.injuryState; // "hurt", "sorelyHurt", or null
+
     let cardClasses = "char-card";
-    if (!character.alive) cardClasses += " dead";
-    else if (hunger) cardClasses += ` ${hunger}`;
+    if (!character.alive) {
+      cardClasses += " dead";
+    } else {
+      // Injury and hunger can co-exist; injury class takes visual precedence
+      // (rendered after hunger so it overrides the border/bg if both present)
+      if (hunger) cardClasses += ` ${hunger}`;
+      if (injury === "hurt") cardClasses += " hurt";
+      if (injury === "sorelyHurt") cardClasses += " sorely-hurt";
+    }
     card.className = cardClasses;
     card.dataset.characterId = character.id;
 
     if (character.alive) {
-      const stateWordHTML = hunger
-        ? `<span class="char-state-word" style="color:${STATE_WORD_COLORS[hunger] || '#555'}">${hunger}</span>`
-        : "";
+      // Build state word — injury takes precedence over hunger in display
+      // since "sorely hurt" is the more actionable piece of information.
+      let stateWordHTML = "";
+      if (injury) {
+        const displayLabel = injury === "sorelyHurt" ? "sorely hurt" : "hurt";
+        stateWordHTML = `<span class="char-state-word" style="color:${STATE_WORD_COLORS[injury] || '#555'}">${displayLabel}</span>`;
+      } else if (hunger) {
+        stateWordHTML = `<span class="char-state-word" style="color:${STATE_WORD_COLORS[hunger] || '#555'}">${hunger}</span>`;
+      }
 
       // Hint sentences are pre-rolled at character creation — read stored values here.
       const hintSuffix = [character.practicedSentence, character.poorSentence].filter(Boolean).join(" ");
@@ -2111,9 +2170,10 @@ function renderRoster() {
         card.classList.toggle("expanded");
       });
 
-      // Tap action slot → open tray for this character
+      // Tap action slot → open tray for this character (unless locked = Sorely Hurt)
       card.querySelector(".action-slot").addEventListener("click", e => {
         e.stopPropagation();
+        if (character.injuryState === "sorelyHurt") return; // locked — no tray
         openActionTray(character.id);
       });
 
@@ -2134,12 +2194,13 @@ function renderRoster() {
   });
 }
 
-// Enables the Start Day button only once every living vanguard
-// member has an action assigned. Button border/color communicates state.
+// Enables the Start Day button only once every living, assignable vanguard
+// member has an action. Sorely Hurt characters cannot be assigned and are
+// excluded from this check — their locked slot doesn't block the day.
 function updateStartDayAvailability() {
   const button = document.getElementById("startDayBtn");
   const unassignedCount = gameState.characters.filter(
-    c => c.alive && !c.currentAction
+    c => c.alive && c.injuryState !== "sorelyHurt" && !c.currentAction
   ).length;
   button.disabled = unassignedCount > 0;
 }
@@ -2156,26 +2217,44 @@ let activeTrayCharacterId = null; // which character's slot opened the tray
 // Groups for the action tray, in display order.
 // Each group is an array of action ids from ACTION_POOL.
 // Group dividers render between groups; no labels shown.
+// "Tend wounds" appears only when at least one other living character is Sorely Hurt or Hurt —
+// filtered in buildTrayRows so it doesn't clutter the tray on healthy runs.
 const ACTION_TRAY_GROUPS = [
   ["Cook provisions", "Stalk beasts", "Gather mast"],     // Provisions
   ["Build Palisade", "Fell timber"],                       // Fortification & Timber
-  ["Keep ward", "Spy out"]                                 // Watch & Recon
+  ["Keep ward", "Spy out"],                                // Watch & Recon
+  ["Tend wounds"]                                          // Care — shown only when relevant
 ];
 
 // Builds the action tray row list for a specific character.
 // Reflects all available actions; selected action gets slate color.
+// "Tend wounds" only appears when at least one other living character is
+// Hurt or Sorely Hurt — avoids cluttering the tray when no one needs care.
 function buildTrayRows(character) {
   const tray = document.getElementById("trayActionList");
   tray.innerHTML = "";
 
-  ACTION_TRAY_GROUPS.forEach((group, groupIdx) => {
-    if (groupIdx > 0) {
+  // Is anyone (besides this character) in need of tending?
+  const anyoneNeedsTending = gameState.characters.some(
+    c => c.alive && c.id !== character.id && c.injuryState !== null
+  );
+
+  let groupsRendered = 0;
+  ACTION_TRAY_GROUPS.forEach((group) => {
+    // Filter out Tend wounds if no one needs it
+    const filteredGroup = group.filter(action => {
+      if (action === "Tend wounds") return anyoneNeedsTending;
+      return true;
+    });
+    if (filteredGroup.length === 0) return;
+
+    if (groupsRendered > 0) {
       const rule = document.createElement("div");
       rule.className = "tray-group-rule";
       tray.appendChild(rule);
     }
 
-    group.forEach(action => {
+    filteredGroup.forEach(action => {
       const isSelected = character.currentAction === action;
       const row = document.createElement("div");
       row.className = "tray-action-row" + (isSelected ? " tray-selected" : "");
@@ -2188,6 +2267,8 @@ function buildTrayRows(character) {
       });
       tray.appendChild(row);
     });
+
+    groupsRendered++;
   });
 }
 
@@ -2243,7 +2324,8 @@ const SKILL_FOR_ACTION = {
   "Stalk beasts":   "Veneur",
   "Cook provisions":"Master Cook",
   "Gather mast":    "Gatherer",
-  "Spy out":        "Veneur"   // Outrider is tabled, see design doc
+  "Spy out":        "Veneur",   // Outrider is tabled, see design doc
+  "Tend wounds":    "Gatherer"  // Gatherer = primary; any character can attempt, Poor tier carries risk
 };
 
 // Actions where a SECOND role also qualifies as primary-band, alongside
@@ -2769,11 +2851,22 @@ function resolveForage(character) {
   const forageItems = ["wild garlic and roots", "berries and mushrooms", "nuts and dandelion greens", "elderberries and watercress"];
   const item = forageItems[Math.floor(Math.random() * forageItems.length)];
 
+  // Simples — medicinal herbs found alongside forage. 20% chance per trip,
+  // yield 1–2. Independent of food yield — a poor foraging day can still
+  // turn up useful simples. Gatherer tier slightly improves the chance.
+  const simplesChance = (tier === "primary") ? 0.30 : (tier === "secondary") ? 0.22 : 0.15;
+  let simplesNote = "";
+  if (Math.random() < simplesChance) {
+    const found = rollRange(1, 2);
+    gameState.resources.simples += found;
+    simplesNote = ` Also cut ${found === 1 ? "a bundle" : "some bundles"} of simples from the undergrowth.`;
+  }
+
   const flavor = {
-    nothing: `${character.name} searched the undergrowth all day and came back empty-handed.`,
-    poor: `${character.name} found a handful of ${item} — ${foundFood} portions.`,
-    average: `${character.name} brought back ${item}, ${foundFood} portions in all.`,
-    great: `${character.name} found ${item} in real abundance — ${foundFood} portions.`
+    nothing: `${character.name} searched the undergrowth all day and came back empty-handed.${simplesNote}`,
+    poor: `${character.name} found a handful of ${item} — ${foundFood} portions.${simplesNote}`,
+    average: `${character.name} brought back ${item}, ${foundFood} portions in all.${simplesNote}`,
+    great: `${character.name} found ${item} in real abundance — ${foundFood} portions.${simplesNote}`
   };
   return flavor[qualityTier];
 }
@@ -2897,19 +2990,94 @@ function resolveScoutForEnemiesForDay(scoutingCharacters) {
   return entries;
 }
 
+// Tend wounds — consequential action. The only current action where failure
+// has a consequence beyond "less output": Poor tier carries a worsening risk,
+// potentially escalating a Hurt character to Sorely Hurt. This is a deliberate
+// player decision: accept the risk of an unskilled attempt, or leave the
+// injured man untended another day. Gatherer = primary tier (best outcomes).
+// Any character can attempt — consistent with "badly but not blocked."
+//
+// Targeting: tends the most severely injured character first (Sorely Hurt
+// before Hurt). Only one target per tender per day.
+function resolveTendWounds(character) {
+  // Find the most in-need living character (not this character)
+  const target = gameState.characters
+    .filter(c => c.alive && c.id !== character.id && c.injuryState !== null)
+    .sort((a, b) => {
+      // Sort: sorelyHurt first, then hurt
+      const severity = { sorelyHurt: 0, hurt: 1 };
+      return severity[a.injuryState] - severity[b.injuryState];
+    })[0];
+
+  if (!target) {
+    return `${character.name} set aside the day for tending but found no one in need of it.`;
+  }
+
+  const tier = getSkillTier(character, "Tend wounds");
+
+  // Poor tier: chance of worsening rather than helping.
+  // Roll for adverse outcome first — it overrides everything else.
+  if (tier === "poor") {
+    if (Math.random() < 0.28) {
+      if (target.injuryState === "hurt") {
+        target.injuryState = "sorelyHurt";
+        target.daysSinceTending = 0; // tending attempt resets the death clock even on a bad outcome
+        target.tendingDaysAccumulated = 0;
+        return `${character.name} did what he could for ${target.name}, but made a poor hand of it — more harm than help, and the wound is worse for it.`;
+      }
+      // Already Sorely Hurt and poor attempt — no escalation (can't get worse), just no progress
+      return `${character.name} set about tending ${target.name}'s wound but the attempt went badly — the work was undone before it began.`;
+    }
+  }
+
+  // Successful tending — accumulate days toward recovery step-down
+  target.daysSinceTending = 0; // reset death clock on any tending attempt
+  target.tendingDaysAccumulated += 1;
+
+  const progressNeeded = 2; // 2 days of tending to step down one tier
+
+  if (target.tendingDaysAccumulated >= progressNeeded) {
+    target.tendingDaysAccumulated = 0;
+    const wasState = target.injuryState;
+    target.injuryState = wasState === "sorelyHurt" ? "hurt" : null;
+
+    if (wasState === "sorelyHurt") {
+      if (tier === "primary") {
+        return `${character.name} worked over ${target.name}'s wound with steady hands — by nightfall the worst of it had eased. He is still hurt, but he is on his feet.`;
+      }
+      return `${character.name} did what he could for ${target.name}. The wound is bad, but he'll walk again now.`;
+    }
+    // hurt → well
+    if (tier === "primary") {
+      return `${character.name} cleaned and bound ${target.name}'s wound properly — it has closed clean. He should be fit for work tomorrow.`;
+    }
+    return `${character.name} bound up ${target.name}'s wound and it seems to have held. He looks better for it.`;
+  }
+
+  // Progress made, not yet enough to step down
+  if (tier === "primary") {
+    return `${character.name} dressed ${target.name}'s wound with care — the swelling has come down some, but he will need another day of it.`;
+  }
+  if (tier === "secondary") {
+    return `${character.name} saw to ${target.name}'s wound as best he could. Another day of the same should see him through.`;
+  }
+  return `${character.name} did what he could for ${target.name}'s wound. It will need more attention before it mends.`;
+}
+
 // Routes a character to the correct resolver based on their task.
 // Note: "Spy out" is deliberately NOT routed through here —
 // it's resolved once per day for all scouts at once, from runDay(),
 // since the Veneur+Man-at-Arms combo needs to see the full day's assignments.
 function resolveCharacterAction(character) {
   switch (character.currentAction) {
-    case "Build Palisade": return resolveBuildPalisade(character);
-    case "Stalk beasts": return resolveHunt(character);
+    case "Build Palisade":  return resolveBuildPalisade(character);
+    case "Stalk beasts":    return resolveHunt(character);
     case "Cook provisions": return resolveCook(character);
-    case "Keep ward": return resolvePerimeterWatch(character);
-    case "Fell timber": return resolveWoodcutting(character);
-    case "Gather mast": return resolveForage(character);
-    case "Spy out": return null; // handled separately, see resolveScoutForEnemiesForDay
+    case "Keep ward":       return resolvePerimeterWatch(character);
+    case "Fell timber":     return resolveWoodcutting(character);
+    case "Gather mast":     return resolveForage(character);
+    case "Tend wounds":     return resolveTendWounds(character);
+    case "Spy out":         return null; // handled separately, see resolveScoutForEnemiesForDay
     default: return `${character.name} had no task and did nothing today.`;
   }
 }
@@ -3210,17 +3378,67 @@ function resolveScoutWave() {
         return;
       }
 
-      const chance = palisadeMitigation(
+      const totalChance = palisadeMitigation(
         baseHitChance(character, anyWatcher, outridersRemaining, outriderCount, soldierWatching)
       );
       const roll = Math.random();
 
-      if (roll < chance) {
-        character.alive = false;
-        const cause = caughtInOpen
-          ? `${character.name} was caught in the open and did not survive the night.`
-          : `${character.name} didn't make it back in time and was caught at the edge of camp.`;
-        entries.push(cause);
+      if (roll < totalChance) {
+        // Split the hit zone into injury vs. death.
+        // Man-at-Arms (mail hauberk) has a reduced death share — mail absorbs
+        // more of the blow. Everyone else has equal injury/death split at this stage
+        // (full raid screen severity ladder will replace this with the locked design).
+        //
+        // Probability bands within the hit zone (0 → totalChance):
+        //   0.0 → 0.4 * total  = Hurt
+        //   0.4 → 0.6 * total  = Sorely Hurt
+        //   0.6 → 1.0 * total  = Death
+        // Man-at-Arms shifts death band start from 0.6 → 0.75 (mail absorbs).
+        const isSoldier = character.skill === "Man-at-Arms";
+        const hurtCeiling      = totalChance * 0.40;
+        const sorelyHurtCeiling = totalChance * (isSoldier ? 0.65 : 0.60);
+
+        if (roll < hurtCeiling) {
+          // Hurt — already hurt characters escalate to Sorely Hurt
+          if (character.injuryState === "sorelyHurt") {
+            // Can't get worse mid-raid than Sorely Hurt; no change
+            entries.push(`${character.name} took another blow to the wound but somehow kept his feet.`);
+          } else if (character.injuryState === "hurt") {
+            character.injuryState = "sorelyHurt";
+            character.daysSinceTending = 0;
+            character.tendingDaysAccumulated = 0;
+            entries.push(`${character.name} was already hurt and could not turn the blow in time — the wound is badly worsened.`);
+          } else {
+            character.injuryState = "hurt";
+            entries.push(
+              caughtInOpen
+                ? `${character.name} was caught at the field's edge and took a wound — he made it back, but he is hurt.`
+                : `${character.name} took a blow in the fighting — not fatal, but the wound will slow him.`
+            );
+          }
+        } else if (roll < sorelyHurtCeiling) {
+          // Sorely Hurt
+          if (character.injuryState === "sorelyHurt") {
+            entries.push(`${character.name} took another blow to the wound but somehow kept his feet.`);
+          } else {
+            character.injuryState = "sorelyHurt";
+            character.daysSinceTending = 0;
+            character.tendingDaysAccumulated = 0;
+            entries.push(
+              caughtInOpen
+                ? `${character.name} was badly wounded in the open — he will not be fit for work until he is tended.`
+                : `${character.name} went down hard in the fighting. He is sorely hurt and will need tending before he can work again.`
+            );
+          }
+        } else {
+          // Death
+          character.alive = false;
+          entries.push(
+            caughtInOpen
+              ? `${character.name} was caught in the open and did not survive the night.`
+              : `${character.name} didn't make it back in time and was caught at the edge of camp.`
+          );
+        }
       }
     });
 
@@ -3238,6 +3456,122 @@ function resolveScoutWave() {
 
   return entries;
 }
+// ---------------------------------------------
+// INJURY PROCESSING
+// Runs once per day before action resolution.
+// Order: simples auto-apply → Hurt+Starving cross-check → Sorely Hurt death clock.
+// ---------------------------------------------
+
+// Auto-applies simples to injured characters (Hurt first, then Sorely Hurt).
+// Simples are the only healing resource that requires no action cost.
+// Hurt + 1 simple → Well. Sorely Hurt uses simples as a substitute for
+// Tend wounds action (2 simples = same as 1 day of tending, toward the
+// same 2-day recovery). Returns journal lines describing any use.
+function applySimples() {
+  const lines = [];
+  const hurt = gameState.characters.filter(c => c.alive && c.injuryState === "hurt");
+  const sorelyHurt = gameState.characters.filter(c => c.alive && c.injuryState === "sorelyHurt");
+
+  // Priority: Hurt first (cheapest to fix, immediate result)
+  hurt.forEach(character => {
+    if (gameState.resources.simples <= 0) return;
+    gameState.resources.simples -= 1;
+    character.injuryState = null;
+    lines.push(`The simples worked — ${character.name}'s wound has closed overnight. He is fit again.`);
+  });
+
+  // Then Sorely Hurt: each application counts as one tending day
+  sorelyHurt.forEach(character => {
+    if (gameState.resources.simples <= 0) return;
+    gameState.resources.simples -= 1;
+    character.daysSinceTending = 0; // resets death clock
+    character.tendingDaysAccumulated += 1;
+    if (character.tendingDaysAccumulated >= 2) {
+      character.tendingDaysAccumulated = 0;
+      character.injuryState = "hurt";
+      lines.push(`The poultice of simples drew the poison from ${character.name}'s wound. He is still hurt, but the worst has passed.`);
+    } else {
+      lines.push(`${character.name}'s wound was dressed with simples. It will need another application before he can work.`);
+    }
+  });
+
+  return lines;
+}
+
+// Checks Hurt characters who are also Starving — cross-condition escalation.
+// Runs after consumption so daysWithoutFood is current for this day.
+function checkInjuryHungerCross() {
+  const lines = [];
+  gameState.characters
+    .filter(c => c.alive && c.injuryState === "hurt" && c.daysWithoutFood >= 1)
+    .forEach(character => {
+      character.injuryState = "sorelyHurt";
+      character.daysSinceTending = 0;
+      character.tendingDaysAccumulated = 0;
+      lines.push(`${character.name} went without food while already hurt — the wound has worsened. He is sorely hurt now and cannot work.`);
+    });
+  return lines;
+}
+
+// Sorely Hurt death clock: 3 days without any tending → death.
+// daysSinceTending increments each day a Sorely Hurt character receives
+// neither Tend wounds nor simples. Reset to 0 by either.
+// Also kills Sorely Hurt + Starving immediately.
+function checkSorelyHurtDeath() {
+  const lines = [];
+  gameState.characters
+    .filter(c => c.alive && c.injuryState === "sorelyHurt")
+    .forEach(character => {
+      // Sorely Hurt + Starving → death immediately
+      if (character.daysWithoutFood >= 1) {
+        character.alive = false;
+        lines.push(`${character.name} was sorely hurt and had no food — his body could not hold on. He did not wake this morning.`);
+        return;
+      }
+      character.daysSinceTending += 1;
+      if (character.daysSinceTending >= 3) {
+        character.alive = false;
+        lines.push(`${character.name}'s wound went untended too long. Three days without care — he did not survive it.`);
+      }
+    });
+  return lines;
+}
+
+// Hurt characters who were not assigned an action today rest and recover.
+// This runs at END of day, after action resolution, so we know who worked.
+// "No work + no simples consumed" = rest recovery (injuryState set to null).
+// Simples bypass is already handled in applySimples at day start —
+// a character healed by simples won't be Hurt by the time we reach here.
+function checkHurtRestRecovery() {
+  const lines = [];
+  gameState.characters
+    .filter(c => c.alive && c.injuryState === "hurt" && !c.currentAction)
+    .forEach(character => {
+      character.injuryState = null;
+      lines.push(`${character.name} rested the day and the wound has closed. He should be fit for work tomorrow.`);
+    });
+  return lines;
+}
+
+// Hurt characters who DID work today: 30% chance of escalation to Sorely Hurt.
+// Journal voice is woven into the action resolver's output (the character notes
+// the wound mid-task). This function handles the mechanical escalation only
+// and produces a follow-up line if it fires.
+function checkHurtWorkEscalation() {
+  const lines = [];
+  gameState.characters
+    .filter(c => c.alive && c.injuryState === "hurt" && c.currentAction && c.currentAction !== "Tend wounds")
+    .forEach(character => {
+      if (Math.random() < 0.30) {
+        character.injuryState = "sorelyHurt";
+        character.daysSinceTending = 0;
+        character.tendingDaysAccumulated = 0;
+        lines.push(`${character.name} pushed through the work despite the wound, but the exertion has worsened it — he is sorely hurt now and cannot work tomorrow without tending.`);
+      }
+    });
+  return lines;
+}
+
 // Runs one full day: tasks resolve (Scout handled separately as a
 // group), then consumption/starvation, then a wave if scheduled,
 // then win/loss conditions.
@@ -3247,6 +3581,11 @@ function runDay() {
   // Reset per-day flags before any resolution runs.
   gameState.scoutDetected = false;
 
+  // Apply simples at day start — before actions, so healed characters
+  // can be assigned freely this day. Death clock for Sorely Hurt increments
+  // later (after consumption confirms whether starvation cross fires).
+  entries.push(...applySimples());
+
   const scoutingCharacters = gameState.characters.filter(
     c => c.alive && c.currentAction === "Spy out"
   );
@@ -3254,7 +3593,8 @@ function runDay() {
   gameState.characters
     .filter(c => c.alive && c.currentAction !== "Spy out")
     .forEach(character => {
-      entries.push(resolveCharacterAction(character));
+      const line = resolveCharacterAction(character);
+      if (line) entries.push(line);
     });
 
   entries.push(...resolveScoutForEnemiesForDay(scoutingCharacters));
@@ -3266,6 +3606,12 @@ function runDay() {
 
   const starvationNotes = checkStarvation();
   entries.push(...starvationNotes);
+
+  // Injury cross-checks run after consumption so daysWithoutFood is current.
+  entries.push(...checkInjuryHungerCross());   // Hurt + Starving → Sorely Hurt
+  entries.push(...checkSorelyHurtDeath());      // Sorely Hurt death clock + Starving cross
+  entries.push(...checkHurtWorkEscalation());   // Hurt characters who worked: 30% escalation
+  entries.push(...checkHurtRestRecovery());     // Hurt characters who rested: auto-recover
 
   // Accumulate Threat from today's actions (passive + per-action adds).
   // Must run after all actions resolve so assignments are final.
@@ -3395,12 +3741,14 @@ function renderResources() {
   threatEl.textContent = threatText;
 
   // Resource strip — text stub (icon art pending)
+  // Simples only shown when > 0 to avoid cluttering an already-full strip
   const resources = [
     { label: "Rations",    count: r.rations },
     { label: "Raw food",   count: r.rawFood },
     { label: "Forage",     count: r.forageFood },
     { label: "Wood",       count: r.wood },
-    { label: "Trees",      count: e.treesRemainingNearby }
+    { label: "Trees",      count: e.treesRemainingNearby },
+    ...(r.simples > 0 ? [{ label: "Simples", count: r.simples }] : [])
   ];
   document.getElementById("resourceStrip").innerHTML = resources
     .map(res => `<div class="res-item"><span class="res-count">${res.count}</span> ${res.label}</div>`)
