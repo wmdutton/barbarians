@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<!-- Barbarians v0.2.2.0 — Resource ledger card: ledger layout, dot leaders, quarry drawer, fresh-ink -->
+<!-- Barbarians v0.2.3.0 — Expandable die-face cards; portrait modal; backstory on face tap -->
 <title>Barbarians</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Spectral+SC:wght@400;600;700&family=Spectral:ital,wght@0,400;0,700;1,400;1,700&display=swap');
@@ -111,22 +111,76 @@ body {
 ═══════════════════════════════════════ */
 
 /* Horizontal strip — always visible in game card row */
-.skill-strip {
+/* ── Collapsed card row — no skills visible ── */
+.char-card-row {
   display: flex;
-  gap: 4px;
-  align-items: center;
-  overflow-x: auto;
-  flex: 1;
-  padding: 6px 6px 6px 4px;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-.skill-strip::-webkit-scrollbar { display: none; }
-
-.skill-chip {
-  width: 52px;
+  align-items: stretch;
   height: 52px;
+}
+
+/* ── Expanded die strip ── */
+.char-die-row {
+  display: none;
+  padding: 8px 10px 10px;
+  gap: 6px;
+  border-top: 1px solid var(--color-parchment-deep);
+  background: rgba(0,0,0,0.018);
+  flex-wrap: wrap;
+}
+.char-card.expanded .char-die-row { display: flex; }
+
+/* ── Die chip ── */
+.die-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+.die-face {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: var(--color-card-bg);
+  border: 1px solid var(--color-parchment-deep);
+  box-shadow: inset 0 1px 3px rgba(50,30,5,0.10), 0 1px 2px rgba(255,255,255,0.7);
+  position: relative;
   flex-shrink: 0;
+}
+/* 9-position pip grid — col: l/c/r  row: t/m/b
+   Inset 22% from each edge so pips never crowd the corners */
+.die-pip {
+  position: absolute;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--color-accent-slate);
+  box-shadow: inset 0 1px 1px rgba(0,0,0,0.25);
+  transform: translate(-50%, -50%);
+}
+.die-pip.l { left: 28%; } .die-pip.c { left: 50%; } .die-pip.r { left: 72%; }
+.die-pip.t { top: 28%; }  .die-pip.m { top: 50%; }  .die-pip.b { top: 72%; }
+
+.die-label {
+  font-family: var(--font-display);
+  font-size: 6.5px;
+  letter-spacing: 0.06em;
+  color: var(--color-accent-slate);
+  text-transform: uppercase;
+  text-align: center;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* Die grid for selection card — 3×2 grid of real die faces */
+.die-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 36px);
+  gap: 8px;
+  justify-content: center;
+  padding: 4px 0;
+}
+
+/* Skill chip — used by selection screen die grid */
+.skill-chip {
   border-radius: 6px;
   background: var(--color-slot-assigned-bg);
   display: flex;
@@ -136,7 +190,6 @@ body {
   gap: 3px;
   padding: 4px 3px 3px;
 }
-
 .skill-chip-name {
   font-family: var(--font-display);
   font-size: 7.5px;
@@ -147,39 +200,77 @@ body {
   line-height: 1;
   white-space: nowrap;
 }
-
 .skill-pips {
   display: flex;
   gap: 2.5px;
   align-items: center;
   justify-content: center;
 }
-
-.skill-pip {
-  width: 4px; height: 4px;
-  border-radius: 50%;
-  background: rgba(79,100,112,0.22);
-}
-
+.skill-pip { width: 4px; height: 4px; border-radius: 50%; background: rgba(79,100,112,0.22); }
 .skill-pip.on { background: var(--color-accent-slate); }
 
-/* Die grid for selection card — flex wrap, centered */
-.die-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 52px);
-  grid-template-rows: repeat(2, 52px);
-  gap: var(--gap-xs);
+/* ── Portrait modal ── */
+.portrait-modal-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(30,18,6,0.55);
+  z-index: 200;
+  align-items: center;
   justify-content: center;
-  padding: 2px 0;
 }
+.portrait-modal-backdrop.open { display: flex; }
 
-.die-grid .skill-chip {
-  width: 52px;
-  height: 52px;
+.portrait-modal-card {
+  width: min(75vw, calc(75vh * 0.667));
+  height: min(75vh, calc(75vw * 1.5));
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--color-parchment-deep);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(20,10,2,0.45);
 }
+.portrait-modal-face {
+  flex: 0 0 55%;
+  background: var(--color-card-portrait-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-bottom: 1px solid var(--color-parchment-deep);
+}
+.portrait-modal-face svg { width: 140px; height: 140px; opacity: 0.28; }
 
-.die-grid .skill-chip-name {
-  font-size: 7.5px;
+.portrait-modal-text {
+  flex: 1;
+  background: var(--color-card-bg);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+}
+.portrait-modal-name {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-ink-primary);
+  letter-spacing: var(--tracking-wide);
+}
+.portrait-modal-role {
+  font-family: var(--font-display);
+  font-size: 11px;
+  color: var(--color-ink-role);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wider);
+  margin-bottom: 4px;
+}
+.portrait-modal-backstory {
+  font-family: var(--font-body);
+  font-style: italic;
+  font-size: 14px;
+  color: var(--color-ink-secondary);
+  line-height: 1.65;
 }
 
 /* ═══════════════════════════════════════
@@ -397,20 +488,99 @@ body {
 .sel-btn-primary:not(:disabled):hover { background: rgba(139,58,47,0.06); }
 
 /* ═══════════════════════════════════════
-   GAME SCREEN
+   GAME SCREEN — two-tab layout
 ═══════════════════════════════════════ */
 #gameScreen {
   overflow: hidden;
   background: var(--color-parchment);
 }
 
-/* Sticky game header */
+/* Sticky game header — always visible above tabs */
 #gameHeader {
   flex-shrink: 0;
   position: sticky;
   top: 0;
   background: var(--color-parchment);
   z-index: 40;
+}
+
+/* Tab content area — fills space between header and tab bar */
+#tabContent {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Individual tab panes */
+.tab-pane {
+  display: none;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+}
+.tab-pane.active {
+  display: flex;
+}
+
+/* Men tab — column: roster scrolls, button pins to bottom */
+#tabMen {
+  /* flex column inherited from .tab-pane, just needs overflow:hidden so roster scrolls */
+  overflow: hidden;
+}
+
+/* Journal tab — full height scrollable */
+#tabJournal {
+  overflow-y: auto;
+  padding: 0 14px;
+  padding-bottom: 16px;
+}
+
+/* ── Tab bar ── */
+#tabBar {
+  flex-shrink: 0;
+  display: flex;
+  border-top: 1px solid var(--color-parchment-deep);
+  background: var(--color-parchment);
+  padding-bottom: env(safe-area-inset-bottom, 12px);
+}
+
+.tab-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 4px 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  gap: 3px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tab-btn-label {
+  font-family: var(--font-display);
+  font-size: 9px;
+  letter-spacing: var(--tracking-widest);
+  text-transform: uppercase;
+  color: var(--color-ink-ornament);
+  transition: color 120ms ease;
+}
+
+.tab-btn.active .tab-btn-label {
+  color: var(--color-ink-primary);
+}
+
+.tab-btn-pip {
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  background: transparent;
+  transition: background 120ms ease;
+}
+
+.tab-btn.active .tab-btn-pip {
+  background: var(--color-selected);
 }
 
 /* Status bar */
@@ -865,22 +1035,42 @@ body {
 .hunger-hungry   { color: #8b6914; font-style: italic; }
 .hunger-starving { color: var(--color-threat); font-style: italic; }
 
-/* Roster panel — fixed height, no scroll, characters always fully visible */
+/* Roster panel — scrollable, fills space above Begin the Day button */
 #rosterPanel {
-  flex-shrink: 0;
-  padding: 10px 14px 0;
-}
-
-/* Journal panel — takes remaining space, scrolls independently */
-#journalPanel {
   flex: 1;
   overflow-y: auto;
-  padding: 0 14px 60px;
-  border-top: 1px solid var(--divider-ink);
-  margin-top: 8px;
+  padding: 10px 14px 4px;
 }
 
-/* Day label above journal — matches site card header style */
+/* Begin the Day — sits in normal flow at the bottom of the Men tab pane,
+   above the tab bar. Not fixed — avoids z-index fight with tab bar. */
+#startDayBtn {
+  flex-shrink: 0;
+  width: 100%;
+  padding: 16px 18px;
+  background: var(--color-parchment);
+  border: none;
+  border-top: 1px solid;
+  border-image: linear-gradient(to right, transparent, #c8b89a, transparent) 1;
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  letter-spacing: var(--tracking-widest);
+  text-transform: uppercase;
+  cursor: pointer;
+  z-index: 50;
+  transition: color 150ms ease, opacity 150ms ease;
+  color: var(--color-ink-muted);
+  opacity: 0.5;
+  display: none;
+}
+
+#startDayBtn.visible { display: block; }
+#startDayBtn.ready {
+  color: var(--color-selected);
+  opacity: 1;
+}
+
+/* Day label above journal */
 #journalDayLabel {
   font-family: var(--font-display);
   font-size: var(--text-lg);
@@ -911,30 +1101,29 @@ body {
 .char-card-row {
   display: flex;
   align-items: stretch;
-  min-height: var(--card-height-collapsed);
+  height: 52px;
 }
 
 .char-face {
-  width: 64px;
-  height: 64px;
+  width: 52px;
   flex-shrink: 0;
   background: var(--color-card-portrait-bg);
   display: flex;
   align-items: center;
   justify-content: center;
-  align-self: center;
+  cursor: pointer;
 }
 
-.char-face svg { width: 36px; height: 36px; opacity: 0.28; }
+.char-face svg { width: 28px; height: 28px; opacity: 0.28; }
 
 .char-identity {
-  flex-shrink: 0;
-  padding: 8px 6px 8px 10px;
+  flex: 1;
+  padding: 6px 4px 6px 10px;
   display: flex;
   flex-direction: column;
   justify-content: center;
   gap: 2px;
-  width: 148px;
+  min-width: 0;
 }
 
 .char-name {
@@ -1016,24 +1205,8 @@ body {
   padding: 3px;
 }
 
-/* Backstory row — shown on card tap */
-.char-backstory-row {
-  border-top: 1px solid;
-  border-image: var(--divider-ink) 1;
-  display: none;
-}
-
-.char-card.expanded .char-backstory-row { display: block; }
-
-.char-flavor-text {
-  font-family: var(--font-body);
-  font-style: italic;
-  font-size: var(--text-base);
-  color: var(--color-ink-secondary);
-  line-height: var(--leading-base);
-  margin: 0;
-  padding: 6px 10px 8px;
-}
+/* Backstory row hidden — moved to portrait modal */
+.char-backstory-row { display: none; }
 
 /* ═══════════════════════════════════════
    ACTION TRAY — pipeline pattern
@@ -1205,33 +1378,7 @@ body {
   overflow-wrap: normal;
 }
 
-/* ═══════════════════════════════════════
-   START DAY BUTTON — fixed bottom
-═══════════════════════════════════════ */
-#startDayBtn {
-  position: fixed;
-  bottom: 0; left: 0;
-  width: 100%;
-  padding: 20px 18px;
-  background: var(--color-parchment);
-  border: none;
-  border-top: 1px solid;
-  border-image: linear-gradient(to right, transparent, #c8b89a, transparent) 1;
-  font-family: var(--font-display);
-  font-size: var(--text-sm);
-  letter-spacing: var(--tracking-widest);
-  text-transform: uppercase;
-  cursor: pointer;
-  z-index: 50;
-  transition: color 150ms ease, opacity 150ms ease;
-  color: var(--color-ink-muted);
-  opacity: 0.5;
-}
 
-#startDayBtn.ready {
-  color: var(--color-selected);
-  opacity: 1;
-}
 
 @media (max-width: 600px) {
   .candidate-grid { grid-template-columns: 1fr; }
@@ -1258,12 +1405,24 @@ body {
 
 <!-- GAME SCREEN -->
 <div id="gameScreen" class="screen">
+  <!-- Portrait modal — triggered by tapping char-face -->
+  <div class="portrait-modal-backdrop" id="portraitModal">
+    <div class="portrait-modal-card">
+      <div class="portrait-modal-face" id="portraitModalFace"></div>
+      <div class="portrait-modal-text">
+        <span class="portrait-modal-name" id="portraitModalName"></span>
+        <span class="portrait-modal-role" id="portraitModalRole"></span>
+        <p class="portrait-modal-backstory" id="portraitModalBackstory"></p>
+      </div>
+    </div>
+  </div>
+  <!-- Always-visible header: status bar + site card + resource ledger -->
   <div id="gameHeader">
     <div id="statusBar">
       <div class="sb-left">
         <span class="sb-title">Barbarians</span>
       </div>
-      <span class="sb-version">v0.2.2.0</span>
+      <span class="sb-version">v0.2.3.0</span>
     </div>
     <hr class="game-rule">
     <div id="siteCardRow">
@@ -1283,14 +1442,35 @@ body {
     <div id="resourceLedger"><div class="ledger-inner"></div></div>
     <hr class="game-rule">
   </div>
-  <div id="rosterPanel">
-    <div id="roster"></div>
+
+  <!-- Tab content area -->
+  <div id="tabContent">
+    <!-- Men tab: character assignment -->
+    <div id="tabMen" class="tab-pane active">
+      <div id="rosterPanel">
+        <div id="roster"></div>
+      </div>
+      <button id="startDayBtn">Begin the Day</button>
+    </div>
+
+    <!-- Journal tab: day log -->
+    <div id="tabJournal" class="tab-pane">
+      <div id="journalDayLabel"></div>
+      <div id="dayLog"></div>
+    </div>
   </div>
-  <div id="journalPanel">
-    <div id="journalDayLabel"></div>
-    <div id="dayLog"></div>
+
+  <!-- Tab bar -->
+  <div id="tabBar">
+    <button class="tab-btn active" data-tab="tabMen">
+      <div class="tab-btn-pip"></div>
+      <span class="tab-btn-label">Men</span>
+    </button>
+    <button class="tab-btn" data-tab="tabJournal">
+      <div class="tab-btn-pip"></div>
+      <span class="tab-btn-label">Journal</span>
+    </button>
   </div>
-  <button id="startDayBtn">Begin the Day</button>
 </div>
 
 <!-- UNASSIGNED MODAL -->
@@ -1486,14 +1666,48 @@ const gameState = {
 ───────────────────────────────────────────── */
 
 // Single skill chip — name + pips, no SVG icon
-function skillChipHTML(face) {
-  let pips = '<div class="skill-pips">';
-  for (let i = 0; i < face.level; i++) pips += `<span class="skill-pip on"></span>`;
-  pips += '</div>';
-  return `<div class="skill-chip">
-    <span class="skill-chip-name">${face.skill}</span>
-    ${pips}
+// Real d6 pip layouts — [col, row] pairs mapping to CSS classes l/c/r × t/m/b
+const DIE_FACE_PIPS = {
+  1: [['c','m']],
+  2: [['r','t'],['l','b']],
+  3: [['r','t'],['c','m'],['l','b']],
+  4: [['l','t'],['r','t'],['l','b'],['r','b']],
+  5: [['l','t'],['r','t'],['c','m'],['l','b'],['r','b']],
+  6: [['l','t'],['r','t'],['l','m'],['r','m'],['l','b'],['r','b']],
+};
+
+// Abbreviated skill labels for die chips
+const SKILL_ABBREV = {
+  'Labor':            'Labor',
+  'Stalk beasts':     'Stalk',
+  'Cook provisions':  'Cook',
+  'Gather mast':      'Gather',
+  'Keep ward':        'Watch',
+  'Fell timber':      'Fell',
+  'Buck timber':      'Buck',
+  'Rive palls':       'Rive',
+  'Set palls':        'Set',
+  'Dig fosse':        'Fosse',
+  'Build palisade':   'Build',
+  'Tend wounds':      'Tend',
+  'Spy out':          'Scout',
+};
+
+function dieFaceHTML(face) {
+  const tier = Math.min(Math.max(Math.round(face.level), 1), 6);
+  const pips = (DIE_FACE_PIPS[tier] || DIE_FACE_PIPS[1])
+    .map(([col, row]) => `<div class="die-pip ${col} ${row}"></div>`)
+    .join('');
+  const label = SKILL_ABBREV[face.skill] || face.skill.split(' ')[0];
+  return `<div class="die-chip">
+    <div class="die-face">${pips}</div>
+    <span class="die-label">${label}</span>
   </div>`;
+}
+
+// Expanded die strip for game roster cards
+function dieFaceStripHTML(faces) {
+  return `<div class="char-die-row">${sortFaces(faces).map(dieFaceHTML).join('')}</div>`;
 }
 
 // Sort faces: Labor last, rest by level desc, ties alphabetical
@@ -1506,14 +1720,20 @@ function sortFaces(faces) {
   });
 }
 
-// Horizontal strip for game card main row
-function skillStripHTML(faces) {
-  return `<div class="skill-strip">${sortFaces(faces).map(skillChipHTML).join('')}</div>`;
+// Skill chip for selection screen die grid (unchanged)
+function skillChipHTML(face) {
+  let pips = '<div class="skill-pips">';
+  for (let i = 0; i < face.level; i++) pips += `<span class="skill-pip on"></span>`;
+  pips += '</div>';
+  return `<div class="skill-chip">
+    <span class="skill-chip-name">${face.skill}</span>
+    ${pips}
+  </div>`;
 }
 
-// 3×2 grid for selection cards
+// 3×2 grid for selection cards — real die face formations
 function dieGridHTML(faces) {
-  return `<div class="die-grid">${sortFaces(faces).map(skillChipHTML).join('')}</div>`;
+  return `<div class="die-grid">${sortFaces(faces).map(dieFaceHTML).join('')}</div>`;
 }
 
 function formatSupplies(supplies) {
@@ -1895,30 +2115,37 @@ function renderRoster() {
           <span class="char-role">${char.role} <span class="char-level">${toRoman(characterLevel(char.faces))}</span></span>
           ${char.hungerState ? `<span class="hunger-${char.hungerState}">${char.hungerState}</span>` : ''}
         </div>
-        ${skillStripHTML(char.faces)}
         <div class="char-action-col">
           ${actionSlotHTML(char)}
         </div>
       </div>
-      <div class="char-backstory-row">
-        <p class="char-flavor-text">${char.backstory}</p>
-      </div>`;
+      ${dieFaceStripHTML(char.faces)}`;
 
-    // Tap card body → expand/collapse
+    // Tap face → open portrait modal
+    card.querySelector('.char-face').addEventListener('click', e => {
+      e.stopPropagation();
+      document.getElementById('portraitModalFace').innerHTML = SILHOUETTE;
+      document.getElementById('portraitModalName').textContent = char.name;
+      document.getElementById('portraitModalRole').textContent = char.role;
+      document.getElementById('portraitModalBackstory').textContent = char.backstory;
+      document.getElementById('portraitModal').classList.add('open');
+    });
+
+    // Tap card row (not face, not action) → expand/collapse die faces
     card.querySelector('.char-card-row').addEventListener('click', e => {
       if (e.target.closest('.char-action-col')) return;
+      if (e.target.closest('.char-face')) return;
       card.classList.toggle('expanded');
     });
 
-    // Tap action slot → if assigned, deselect first (shows tray to reassign); if empty, open tray
+    // Tap action slot → assign or reassign
     card.querySelector('.action-slot').addEventListener('click', e => {
       e.stopPropagation();
       if (char.currentAction) {
         char.currentAction = null;
         renderRoster();
         updateStartDay();
-        renderSiteCard({});  // refresh in-progress indicator
-        // Reopen tray immediately so player can pick a new action
+        renderSiteCard({});
         openActionTray(char.name);
       } else {
         openActionTray(char.name);
@@ -2251,9 +2478,42 @@ function startGame() {
   renderSiteCard();
   renderRoster();
   updateStartDay();
+  // Ensure Men tab is active and button is visible on game start
+  switchTab('tabMen');
 }
 
 document.getElementById('confirmBtn').addEventListener('click', startGame);
+
+/* ─────────────────────────────────────────────
+   TAB SYSTEM
+───────────────────────────────────────────── */
+function switchTab(tabId) {
+  // Panes
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.getElementById(tabId).classList.add('active');
+  // Buttons
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.tab === tabId);
+  });
+  // Begin the Day button — visible only on Men tab
+  const btn = document.getElementById('startDayBtn');
+  if (tabId === 'tabMen') {
+    btn.classList.add('visible');
+  } else {
+    btn.classList.remove('visible');
+  }
+}
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+});
+
+// Portrait modal — tap outside card to dismiss
+document.getElementById('portraitModal').addEventListener('click', e => {
+  if (!e.target.closest('.portrait-modal-card')) {
+    document.getElementById('portraitModal').classList.remove('open');
+  }
+});
 
 /* ─────────────────────────────────────────────
    D6 ROLL ENGINE
@@ -2993,6 +3253,9 @@ document.getElementById('startDayBtn').addEventListener('click', () => {
 
   renderSiteCard(deltas);
   renderRoster();
+
+  // Auto-switch to Journal tab so player reads the day log
+  switchTab('tabJournal');
 });
 
 /* ─────────────────────────────────────────────
