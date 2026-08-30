@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<!-- Barbarians v0.2.3.0 — Expandable die-face cards; portrait modal; backstory on face tap -->
+<!-- Barbarians v0.2.4.0 — Green meat rename; cook cap/rate fix; unmake fail; rive/cook text -->
 <title>Barbarians</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Spectral+SC:wght@400;600;700&family=Spectral:ital,wght@0,400;0,700;1,400;1,700&display=swap');
@@ -115,7 +115,7 @@ body {
 .char-card-row {
   display: flex;
   align-items: stretch;
-  height: 52px;
+  min-height: 52px;
 }
 
 /* ── Expanded die strip ── */
@@ -1101,7 +1101,7 @@ body {
 .char-card-row {
   display: flex;
   align-items: stretch;
-  height: 52px;
+  min-height: 52px;
 }
 
 .char-face {
@@ -1422,7 +1422,7 @@ body {
       <div class="sb-left">
         <span class="sb-title">Barbarians</span>
       </div>
-      <span class="sb-version">v0.2.3.0</span>
+      <span class="sb-version">v0.2.4.0</span>
     </div>
     <hr class="game-rule">
     <div id="siteCardRow">
@@ -1454,7 +1454,7 @@ body {
     </div>
 
     <!-- Journal tab: day log -->
-    <div id="tabJournal" class="tab-pane">
+    <div id="tabJournal" class="tab-pane" onclick="switchTab('tabMen')">
       <div id="journalDayLabel"></div>
       <div id="dayLog"></div>
     </div>
@@ -1535,7 +1535,7 @@ const ROLE_DEFS = [
     backstory: 'Has moved more earth than most men see in a lifetime.' },
   { role: 'Woodward',    sig: 'Forestry',   weapon: 'Spear',
     backstory: "Reads a tree's grain the way a priest reads scripture." },
-  { role: 'Man-at-Arms', sig: 'Fight',      weapon: 'Sword', supplies: { rations: 3 }, laborMin: 2,
+  { role: 'Man-at-Arms', sig: 'Fight',      weapon: 'Sword', supplies: { rations: 3 },
     backstory: 'Survived a border skirmish that killed most of his unit.' },
   { role: 'Carpenter',   sig: 'Carpentry',  weapon: 'Spear',
     backstory: 'Left an apprenticeship unfinished when the roads north grew too dangerous.' },
@@ -1571,15 +1571,23 @@ function shuffle(arr) {
   return a;
 }
 
-function generateFaces(sigSkill, laborMin = 1) {
-  const laborLevel = rand(laborMin, 2);
-  // Pool: all skills except sig and Labor
+function generateFaces(sigSkill) {
+  // Sig skill always level 3.
+  // Labor always present at level 1 or 2 (required skill for all roles).
+  // 4 remaining faces drawn from the rest of the skill pool at level 1 or 2.
+  // Guarantee: at least one L1 and one L2 among all non-sig faces.
   const pool = ALL_SKILLS.filter(s => s !== sigSkill && s !== 'Labor');
-  const picked = shuffle(pool).slice(0, 4);
+  const others = shuffle(pool).slice(0, 4);
+  const allNonSig = ['Labor', ...others];
+
+  // Assign levels 1-2 then enforce at least one of each
+  const levels = allNonSig.map(() => rand(1, 2));
+  if (!levels.includes(1)) levels[Math.floor(Math.random() * levels.length)] = 1;
+  if (!levels.includes(2)) levels[Math.floor(Math.random() * levels.length)] = 2;
+
   return [
-    { skill: sigSkill, level: 4 },
-    { skill: 'Labor',  level: laborLevel },
-    ...picked.map(s => ({ skill: s, level: rand(1, 3) })),
+    { skill: sigSkill, level: 3 },
+    ...allNonSig.map((s, i) => ({ skill: s, level: levels[i] })),
   ];
 }
 
@@ -1609,7 +1617,7 @@ function generateCandidates() {
 
     let faces, key, attempts = 0;
     do {
-      faces = generateFaces(def.sig, def.laborMin || 1);
+      faces = generateFaces(def.sig);
       key = facesKey(faces);
       attempts++;
     } while (seen.has(key) && attempts < 20);
@@ -1737,14 +1745,14 @@ function dieGridHTML(faces) {
 }
 
 function formatSupplies(supplies) {
-  const labels = { rations: 'rations', rawFood: 'raw food', forageFood: 'forage', timber: 'timber', logs: 'logs', palls: 'palls' };
+  const labels = { rations: 'rations', rawFood: 'green meat', forageFood: 'forage', timber: 'timber', logs: 'logs', palls: 'palls' };
   return Object.entries(supplies).map(([k, v]) => `${v} ${labels[k]}`).join(', ');
 }
 
 
 const RESOURCE_LABELS = {
   rations:    'Rations',
-  rawFood:    'Raw Food',
+  rawFood:    'Green Meat',
   forageFood: 'Forage',
   quarry:     'Quarry',
   simples:    'Simples',
@@ -1944,10 +1952,9 @@ function renderSiteCard(deltas = {}) {
 
   const visibleProjects = PROJECTS.filter(p => p.show);
 
-  // Structures — only completed ones, only Hearth and Palisade (Fosse handled separately below)
+  // Structures card — only Hearth (Fosse and Palisade shown on site card directly)
   const structures = [];
-  if (gs.buildings.hearth)   structures.push({ label: 'Hearth', tip: 'Cook cap +2 · Forage cooks 1.5×' });
-  if (gs.buildings.palisade) structures.push({ label: 'Palisade' });
+  if (gs.buildings.hearth) structures.push({ label: 'Hearth', tip: 'Cook cap +2 · Forage cooks 1.5×' });
 
   // Build siteProjects HTML: Site Development only (no Structures section here)
   let projectsHTML = '';
@@ -1963,11 +1970,14 @@ function renderSiteCard(deltas = {}) {
   }
   document.getElementById('siteProjects').innerHTML = projectsHTML;
 
-  // Fosse enhancement — plain text label below site name, only when complete
+  // Site card enhancements -- fosse and palisade shown as stacked labels below site name
   const fosseEl = document.getElementById('fosseEnhancement');
   if (fosseEl) {
-    if (gs.buildings.fosseComplete) {
-      fosseEl.textContent = '⁜ Fosse cut';
+    const lines = [];
+    if (gs.buildings.fosseComplete) lines.push('⁜ Fosse cut');
+    if (gs.buildings.palisade)      lines.push('⁜ Palisade raised');
+    if (lines.length > 0) {
+      fosseEl.innerHTML = lines.map(l => `<div>${l}</div>`).join('');
       fosseEl.style.display = '';
     } else {
       fosseEl.style.display = 'none';
@@ -2060,7 +2070,7 @@ document.getElementById('rerollBtn').addEventListener('click', () => {
     if ((roleCounts[def.role] || 0) >= 2) continue;
     let faces, key, attempts = 0;
     do {
-      faces = generateFaces(def.sig, def.laborMin || 1);
+      faces = generateFaces(def.sig);
       key = facesKey(faces);
       attempts++;
     } while (seenKeys.has(key) && attempts < 20);
@@ -2539,50 +2549,51 @@ function getSkillLevel(character, skillName) {
    table[roll][level-1] where roll = 1–6, level = 1–6.
 ───────────────────────────────────────────── */
 const TABLES = {
-  // Stalk beasts — output: game category string
+  // Stalk beasts -- output: game category string
+  // Row = d6 roll (1-6), column = Hunt skill level (1-6)
   HUNT: {
-    1: ['nothing','nothing','small','small','small','small'],
-    2: ['nothing','small','small','small','medium','medium'],
-    3: ['small','small','small','medium','medium','medium'],
+    1: ['nothing','nothing','tiny','small','small','small'],
+    2: ['nothing','tiny','small','small','medium','medium'],
+    3: ['tiny','small','small','medium','medium','medium'],
     4: ['small','small','medium','medium','medium','large'],
     5: ['small','medium','medium','medium','large','large'],
     6: ['small','medium','medium','large','large','large'],
   },
-  // Unmake kill — output: green meat portions per category
-  // True yield caps: small=4, medium=9, large=25
+  // Unmake kill -- recovery % of that animal's true yield (rolled at hunt time).
+  // At L4: 3/6 rolls hit 100%. At L5: 4/6. At L6: 5/6.
+  // Floor of 1 portion always applied when any yield > 0.
   // Row = d6 roll (1-6), column = Hunt skill level (1-6)
-  UNMAKE_SMALL: {
-    1: [1,1,1,2,2,2], 2: [1,1,2,2,2,3], 3: [1,2,2,2,3,3],
-    4: [1,2,2,3,3,4], 5: [2,2,3,3,4,4], 6: [2,3,3,4,4,4],
+  UNMAKE_PCT: {
+    1: [0.30,0.40,0.50,0.60,0.70,0.80],
+    2: [0.40,0.50,0.60,0.70,0.80,0.90],
+    3: [0.50,0.60,0.70,0.80,0.90,1.00],
+    4: [0.55,0.65,0.80,1.00,1.00,1.00],
+    5: [0.60,0.70,0.90,1.00,1.00,1.00],
+    6: [0.65,0.80,1.00,1.00,1.00,1.00],
   },
-  UNMAKE_MEDIUM: {
-    1: [2,2,3,4,5,5], 2: [2,3,4,5,5,6], 3: [3,4,4,5,6,7],
-    4: [3,4,5,6,7,8], 5: [4,5,6,7,8,9], 6: [4,5,6,8,9,9],
+  // Cook provisions -- conversion % applied to input portions => rations out.
+  // Cap = max input portions per day. Pre-hearth: 5. With hearth: skill-gated to 10.
+  // At L4: 3/6 rolls hit 100%. At L5: 4/6. At L6: 5/6.
+  // Floor of 1 ration always applied if any input consumed (L1 safety floor).
+  // Row = d6 roll (1-6), column = Cook skill level (1-6)
+  COOK_PCT: {
+    1: [0.40,0.50,0.60,0.70,0.80,0.90],
+    2: [0.50,0.60,0.70,0.80,0.90,1.00],
+    3: [0.55,0.65,0.75,0.85,1.00,1.00],
+    4: [0.60,0.70,0.80,1.00,1.00,1.00],
+    5: [0.65,0.75,0.90,1.00,1.00,1.00],
+    6: [0.70,0.80,1.00,1.00,1.00,1.00],
   },
-  UNMAKE_LARGE: {
-    1: [5,7,9,11,13,15],  2: [6,8,10,12,15,17], 3: [7,9,12,14,17,19],
-    4: [8,11,13,16,19,22], 5: [9,12,15,18,21,24], 6: [10,13,17,20,23,25],
-  },
-  // Unmake prize — output: green meat portions (true yield 30–50)
-  // Only reachable via driven hunt event (level 6 Hunt required)
-  UNMAKE_PRIZE: {
-    1: [12,16,20,24,28,32], 2: [14,18,22,26,30,35], 3: [16,20,25,29,33,38],
-    4: [18,23,27,32,36,41], 5: [20,25,30,35,40,45], 6: [22,28,33,38,44,50],
-  },
-  // Gather mast — output: forage food units
+  // Cook input cap by skill level. Index = level-1.
+  // No hearth: always 5. With hearth: skill 1-2 stays 5, skill 3+ expands.
+  COOK_CAP_NO_HEARTH: 5,
+  COOK_CAP_HEARTH: [5,5,7,8,9,10],
+  // Gather mast -- output: forage food units
+  // Row = d6 roll (1-6), column = Gather skill level (1-6)
   GATHER: {
     1: [0,0,1,1,2,2], 2: [0,1,1,2,2,3], 3: [1,1,2,2,3,4],
     4: [1,1,2,3,4,5], 5: [1,2,3,4,5,6], 6: [1,2,3,5,6,7],
   },
-  // Cook provisions — output: conversion rate (float)
-  // rations = floor(rawFood × rate), capped by hearth cap
-  COOK: {
-    1: [0.5,0.5,0.75,1.0,1.25,1.5],  2: [0.5,0.75,1.0,1.25,1.5,1.75],
-    3: [0.75,0.75,1.25,1.5,1.75,2.0], 4: [0.75,1.0,1.25,1.5,1.75,2.0],
-    5: [1.0,1.0,1.5,1.75,2.0,2.25],   6: [1.0,1.25,1.5,2.0,2.25,2.5],
-  },
-  COOK_PRE_HEARTH_CAP: 3,
-  COOK_HEARTH_CAPS: [6,8,10,12,14,16], // index = level-1
   // Fell timber — output: timber units
   FELL: {
     1: [0,0,1,1,1,2], 2: [0,1,1,1,2,2], 3: [1,1,1,2,2,3],
@@ -2618,25 +2629,41 @@ const TABLES = {
   },
 };
 
-// Unmake table keyed by quarry category
-const UNMAKE_TABLES = { small: TABLES.UNMAKE_SMALL, medium: TABLES.UNMAKE_MEDIUM, large: TABLES.UNMAKE_LARGE, prize: TABLES.UNMAKE_PRIZE };
-
-// Named animals for log text (period-accurate, Welsh Marches 1067–1081)
-// Categories recalibrated to realistic dressed-weight portions (~150–200g each):
-//   small  = 2–4 portions  (birds, squirrel, young hare)
-//   medium = 5–9 portions  (adult hare, mallard)
-//   large  = 15–25 portions (roe deer, fallow deer, red deer hind)
-//   prize  = 30–50 portions (red deer hart, wild boar — driven hunt event, level 6 only)
-// Caps in UNMAKE tables reflect max recoverable at perfect skill — not inflated.
-const ANIMAL_NAMES = {
-  small:  ['a grey partridge','a woodcock','a snipe','a wood pigeon','a young hare','a squirrel'],
-  medium: ['an adult hare','a mallard'],
-  large:  ['a roe deer','a fallow deer','a red deer hind'],
-  prize:  ['a red deer hart','a wild boar'],
+// Animal buckets -- each category has a yield range [min, max] and a pool of animal names.
+// True yield for a specific kill is rolled at hunt time: roll 1 = min, roll 6 = max.
+// Formula: min + Math.floor((roll - 1) / 5 * (max - min))
+// Period-accurate, Welsh Marches 1067-1081. No rabbits (no wild population until late 12th c.)
+const ANIMAL_BUCKETS = {
+  tiny:   { min: 2,  max: 3,  names: ['a snipe','a woodcock','a squirrel'] },
+  small:  { min: 3,  max: 5,  names: ['a grey partridge','a wood pigeon','a young hare'] },
+  medium: { min: 5,  max: 8,  names: ['an adult hare','a mallard'] },
+  large:  { min: 12, max: 18, names: ['a roe deer','a fallow deer','a red deer hind'] },
+  prize:  { min: 25, max: 40, names: ['a red deer hart','a wild boar'] },
 };
+
+// Roll a true yield for an animal within its bucket range using a d6.
+// Roll 1 = min, roll 6 = max, smooth spread between.
+function rollTrueYield(category, roll) {
+  const b = ANIMAL_BUCKETS[category];
+  return b.min + Math.floor((roll - 1) / 5 * (b.max - b.min));
+}
+
+// Pick a random animal name from a bucket.
 function animalName(category) {
-  const pool = ANIMAL_NAMES[category];
+  const pool = ANIMAL_BUCKETS[category].names;
   return pool[Math.floor(Math.random() * pool.length)];
+}
+
+// Size flavor for unmake journal line based on where yield landed in the bucket range.
+// Bottom third = lean, top third = heavy, middle = no adjective.
+function yieldFlavor(trueYield, category) {
+  const b = ANIMAL_BUCKETS[category];
+  const span = b.max - b.min;
+  if (span === 0) return '';
+  const pos = trueYield - b.min;
+  if (pos <= span * 0.33) return 'lean';
+  if (pos >= span * 0.67) return 'heavy';
+  return '';
 }
 
 /* ─────────────────────────────────────────────
@@ -2662,6 +2689,8 @@ const ACTION_RESOLVERS = {
   // ── STALK BEASTS ─────────────────────────────────────────────────────────
   // Produces quarry (dead animal, hide-on). Not rawFood directly.
   // rawFood comes from Unmake kill the following day.
+  // True yield (portions) is rolled now and stored on the quarry entry --
+  // Unmake uses it as the ceiling for recovery.
   'Stalk beasts': (char, gs) => {
     const level = getSkillLevel(char, 'Hunt');
     if (level === 0) return { roll: 0, gained: null, category: null, resource: 'quarry', label: 'nothing' };
@@ -2672,33 +2701,39 @@ const ACTION_RESOLVERS = {
     const category = TABLES.HUNT[roll][level - 1];
     if (category !== 'nothing') {
       const killName = animalName(category);
-      gs.quarry.push({ category, dayKilled: gs.day, name: killName });
+      const yieldRoll = rollCharacterDie(); // separate roll for this animal's size within category
+      const trueYield = rollTrueYield(category, yieldRoll);
+      gs.quarry.push({ category, dayKilled: gs.day, name: killName, trueYield });
       gs.seenResources.add('quarry');
-      return { roll, gained: 1, category, killName, resource: 'quarry', label: category };
+      return { roll, gained: 1, category, killName, trueYield, resource: 'quarry', label: category };
     }
     return { roll, gained: 0, category: 'nothing', killName: null, resource: 'quarry', label: 'nothing' };
   },
 
   // ── UNMAKE KILL ───────────────────────────────────────────────────────────
   // Consumes oldest quarry, produces green meat (rawFood).
+  // Recovery % from UNMAKE_PCT table applied to trueYield stored on the quarry entry.
+  // Floor of 1 portion always applied on any non-failure result.
+  // On failure the kill is consumed and wasted -- carcass ruined.
   'Unmake kill': (char, gs) => {
     const level = getSkillLevel(char, 'Hunt');
     if (level === 0 || gs.quarry.length === 0) {
       return { roll: 0, gained: 0, resource: 'rawFood', label: 'nothing to unmake' };
     }
+    const q = gs.quarry.shift(); // consume oldest -- committed regardless of outcome
     if (rollFailureEvent(level, 'daily')) {
-      return { roll: 0, gained: 0, resource: 'rawFood', label: 'nothing', failed: true };
+      return { roll: 0, gained: 0, resource: 'rawFood', label: 'nothing', failed: true, quarryName: q.name, category: q.category };
     }
     const roll = rollCharacterDie();
-    const q = gs.quarry.shift(); // consume oldest
-    const table = UNMAKE_TABLES[q.category];
-    const gained = table[roll][level - 1];
-    if (gained > 0) {
-      gs.resources.rawFood += gained;
-      gs.rawFoodLog.push({ day: gs.day, amount: gained });
-      gs.seenResources.add('rawFood');
-    }
-    return { roll, gained, category: q.category, quarryName: q.name, resource: 'rawFood', label: 'green meat' };
+    const pct = TABLES.UNMAKE_PCT[roll][level - 1];
+    const trueYield = q.trueYield || rollTrueYield(q.category, rollCharacterDie()); // fallback for legacy entries
+    const raw = Math.floor(trueYield * pct);
+    const gained = Math.max(raw, 1); // floor of 1 portion always
+    const flavor = yieldFlavor(trueYield, q.category);
+    gs.resources.rawFood += gained;
+    gs.rawFoodLog.push({ day: gs.day, amount: gained });
+    gs.seenResources.add('rawFood');
+    return { roll, gained, trueYield, flavor, category: q.category, quarryName: q.name, resource: 'rawFood', label: 'green meat' };
   },
 
   // ── GATHER MAST ───────────────────────────────────────────────────────────
@@ -2860,8 +2895,8 @@ function logLine(name, actionId, result) {
       return `${name} brought in ${result.killName}.`;
 
     case 'Unmake kill': {
-      if (result.failed) return `${name} fumbled the unmake — the work came to nothing.`;
       const qn = result.quarryName || (result.category ? `the ${result.category} game` : 'the kill');
+      if (result.failed) return `${name} fumbled the unmake — ${qn} was ruined. The meat is lost.`;
       if (g === 0) return `${name} unmade ${qn} but recovered nothing worth keeping.`;
       return `${name} unmade ${qn} — ${g} portion${g !== 1 ? 's' : ''} of green meat.`;
     }
@@ -2874,7 +2909,8 @@ function logLine(name, actionId, result) {
         : `${name} gathered ${g} foraged good${g !== 1 ? 's' : ''} from the ground.`;
 
     case 'Cook provisions':
-      if (g === 0) return `${name} could cook nothing — no food in camp.`;
+      if (result.failed) return `${name} could cook nothing — the fire would not hold.`;
+      if (g === 0) return `${name} tended the fire but had nothing left to cook.`;
       return `${name} made ${g} ration${g !== 1 ? 's' : ''} from what was there.`;
 
     case 'Fell timber':
@@ -2889,7 +2925,7 @@ function logLine(name, actionId, result) {
 
     case 'Rive palls':
       if (result.failed) return `${name} worked the logs but the day came to nothing.`;
-      if (g === 0) return `${name} could not rive — no logs to work.`;
+      if (g === 0) return `${name} worked the logs but found nothing worth riving.`;
       return `${name} rived and sharpened ${g} pall${g !== 1 ? 's' : ''} from the logs.`;
 
     case 'Clear Ground':
@@ -2974,66 +3010,71 @@ document.getElementById('startDayBtn').addEventListener('click', () => {
     log.income.push({ name: char.name, action: actionId, result });
   });
 
-  // ── Phase 2: Cook ────────────────────────────────────────────────────────
-  // Each cook rolls d6 → rate table lookup → rations = floor(rawFood × rate), capped.
-  // Multiple cooks pool caps. rawFood processed at rolled rate; forageFood at 1.5:1 floor.
+  // -- Phase 2: Cook -----------------------------------------------------------
+  // Model: cap = max INPUT portions per day. Conversion % (COOK_PCT) applied to total input.
+  // Cap pre-hearth: 5. With hearth: skill-gated (skill 1-2=5, skill 3=7, 4=8, 5=9, 6=10).
+  // Forage pre-feeding: reserve forage for direct eating first. Leftover fills cook input.
+  // Input: green meat first, then leftover forage up to cap.
+  // Rations = max(floor(totalInput * pct), 1) if any input consumed -- L1 floor guarantee.
   const cookChars = gs.characters.filter(c => c.currentAction === COOK_ACTION);
   if (cookChars.length > 0) {
+    // Reserve forage for direct eating before cook gets remainder
+    const aliveCount = gs.characters.filter(c => !c.dead).length;
+    const forageForEating = Math.min(gs.resources.forageFood, aliveCount);
+    const forageAvailableForCook = gs.resources.forageFood - forageForEating;
+
     const cookRolls = cookChars.map(c => {
       const level = getSkillLevel(c, 'Cook');
       if (level === 0 || rollFailureEvent(level, 'daily')) {
-        return { char: c, roll: 0, rate: 0, cap: 0 };
+        return { char: c, roll: 0, pct: 0, inputCap: 0, failed: true };
       }
       const roll = rollCharacterDie();
-      const rate = TABLES.COOK[roll][level - 1];
-      const cap = gs.buildings.hearth
-        ? TABLES.COOK_HEARTH_CAPS[level - 1]
-        : TABLES.COOK_PRE_HEARTH_CAP;
-      return { char: c, roll, rate, cap };
+      const pct = TABLES.COOK_PCT[roll][level - 1];
+      const inputCap = gs.buildings.hearth
+        ? TABLES.COOK_CAP_HEARTH[level - 1]
+        : TABLES.COOK_CAP_NO_HEARTH;
+      return { char: c, roll, pct, inputCap, failed: false };
     });
-    const totalCap = cookRolls.reduce((sum, r) => sum + r.cap, 0);
-    // Weighted average rate (by cap share) for rawFood conversion
-    const avgRate = totalCap > 0
-      ? cookRolls.reduce((sum, r) => sum + r.rate * r.cap, 0) / totalCap
-      : 0;
 
     let rationsMade = 0;
-    let inputUsed = 0;
+    let forageUsedByCook = 0;
 
-    // rawFood first — apply rolled rate, then cap
-    if (avgRate > 0 && gs.resources.rawFood > 0) {
-      const fromRaw = Math.min(gs.resources.rawFood, totalCap);
-      const fromRawRations = Math.min(Math.floor(fromRaw * avgRate), totalCap);
-      if (fromRaw > 0) {
-        gs.resources.rawFood -= fromRaw;
-        gs.rawFoodLog = gs.rawFoodLog.map(e => ({ ...e, amount: Math.max(0, e.amount - fromRaw) })).filter(e => e.amount > 0);
-        rationsMade += fromRawRations;
-        inputUsed += fromRaw;
+    cookRolls.forEach(r => {
+      if (r.failed) {
+        log.cook.push({ name: r.char.name, action: COOK_ACTION, result: { roll: r.roll, gained: 0, failed: true } });
+        return;
       }
-    }
+      // Fill input: green meat first, then leftover forage
+      const rawTaken = Math.min(gs.resources.rawFood, r.inputCap);
+      const remainingCap = r.inputCap - rawTaken;
+      const forageTaken = Math.min(forageAvailableForCook - forageUsedByCook, remainingCap);
+      const totalInput = rawTaken + forageTaken;
 
-    // forageFood next (1.5:1 floor), remaining cap
-    const remainCap = totalCap - inputUsed;
-    const fromForage = Math.min(gs.resources.forageFood, remainCap);
-    if (fromForage > 0) {
-      gs.resources.forageFood -= fromForage;
-      gs.forageFoodLog = gs.forageFoodLog.map(e => ({ ...e, amount: Math.max(0, e.amount - fromForage) })).filter(e => e.amount > 0);
-      rationsMade += Math.floor(fromForage * 1.5);
+      if (totalInput === 0) {
+        log.cook.push({ name: r.char.name, action: COOK_ACTION, result: { roll: r.roll, gained: 0, failed: false } });
+        return;
+      }
+
+      // Deduct green meat
+      gs.resources.rawFood -= rawTaken;
+      gs.rawFoodLog = gs.rawFoodLog.map(e => ({ ...e, amount: Math.max(0, e.amount - rawTaken) })).filter(e => e.amount > 0);
+      forageUsedByCook += forageTaken;
+
+      // Apply conversion % -- floor of 1 ration always if any input consumed
+      const raw = Math.floor(totalInput * r.pct);
+      const cookRations = Math.max(raw, 1);
+      rationsMade += cookRations;
+      log.cook.push({ name: r.char.name, action: COOK_ACTION, result: { roll: r.roll, gained: cookRations, failed: false } });
+    });
+
+    // Deduct forage used by cook (reserved portion untouched here -- consumed in Phase 4)
+    if (forageUsedByCook > 0) {
+      gs.resources.forageFood -= forageUsedByCook;
+      gs.forageFoodLog = gs.forageFoodLog.map(e => ({ ...e, amount: Math.max(0, e.amount - forageUsedByCook) })).filter(e => e.amount > 0);
     }
 
     gs.resources.rations += rationsMade;
-
-    // Log each cook proportionally by cap share
-    let remaining = rationsMade;
-    cookRolls.forEach((r, i) => {
-      const share = i === cookRolls.length - 1
-        ? remaining
-        : (totalCap > 0 ? Math.round(rationsMade * r.cap / totalCap) : 0);
-      remaining -= share;
-      log.cook.push({ name: r.char.name, action: COOK_ACTION, result: { roll: r.roll, gained: share } });
-    });
   }
-
   // ── Phase 3: spoilage sweep ──────────────────────────────────────────────
   // Quarry: spoils after 1 day (must be unmade same day or next)
   const rottenQuarry = gs.quarry.filter(q => gs.day - q.dayKilled >= 1);
@@ -3209,25 +3250,38 @@ document.getElementById('startDayBtn').addEventListener('click', () => {
     return `${names.slice(0,-1).join(', ')}, and ${names[names.length-1]}`;
   }
 
-  // Classify: zero-result resource actions get oxblood
+  // Classify: any failure or zero-output on a resource/site action → oxblood (log-spoil)
   function entryClass(action, result) {
-    const isResourceAction = ['Stalk beasts','Gather mast','Fell timber','Buck timber','Rive palls','Cook provisions'].includes(action);
-    if (isResourceAction && result.gained === 0) return 'log-fail';
+    if (result.failed) return 'log-spoil';
+    const isResourceAction = ['Stalk beasts','Gather mast','Fell timber','Buck timber','Rive palls','Cook provisions','Unmake kill'].includes(action);
+    if (isResourceAction && result.gained === 0) return 'log-spoil';
     return '';
   }
 
-  // Site — grouped by action (first — what the men built/worked)
+  // Site -- grouped by action (built/worked)
   groupedLines(log.site, true).forEach(({ names, action, result }) => {
-    const label = nameList(names);
-    addEntry(logLine(label, action, result), '');
+    addEntry(logLine(nameList(names), action, result), '');
   });
 
-  // Income — individual lines (what was gathered/hunted)
-  log.income.forEach(({ name, action, result }) => {
-    addEntry(logLine(name, action, result), entryClass(action, result));
+  // Income -- ordered: Gather, Stalk, Unmake, then other resource actions.
+  // Same-action entries are consecutive (Gather before Hunt before Unmake).
+  const ACTION_ORDER = ['Gather mast', 'Stalk beasts', 'Unmake kill', 'Fell timber', 'Buck timber', 'Rive palls'];
+  const incomeByAction = {};
+  log.income.forEach(e => {
+    if (!incomeByAction[e.action]) incomeByAction[e.action] = [];
+    incomeByAction[e.action].push(e);
+  });
+  const orderedActions = [
+    ...ACTION_ORDER.filter(a => incomeByAction[a]),
+    ...Object.keys(incomeByAction).filter(a => !ACTION_ORDER.includes(a)),
+  ];
+  orderedActions.forEach(action => {
+    incomeByAction[action].forEach(({ name, result }) => {
+      addEntry(logLine(name, action, result), entryClass(action, result));
+    });
   });
 
-  // Cook — individual (only one cook)
+  // Cook
   log.cook.forEach(({ name, action, result }) => {
     addEntry(logLine(name, action, result), entryClass(action, result));
   });
