@@ -36,6 +36,22 @@ Open http://localhost:8000. To test on a phone on the same Wi-Fi, use
 - Push `development`, then open a PR from `development` into `main`.
 - Don't push unless asked.
 
+## Branch sync
+
+- After merging a PR into `main`, immediately sync `development`:
+  ```sh
+  git checkout development
+  git fetch origin
+  git merge --ff-only origin/main
+  git push origin development
+  ```
+- At the start of every session, run `git fetch origin`. If `origin/main` is
+  ahead of `development` and `development` has no unpushed commits, sync it the
+  same way. If the fast-forward fails or `development` has unpushed work, stop
+  and tell Mason instead of merging anything.
+- Never push directly to `main` and never force-push.
+- Only merge a PR when Mason explicitly asks.
+
 ## Layout
 
 - `index.html` — the entire game (HTML, CSS and JS in one file). The version
